@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35327.3
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Load Balancer", "Load Balancer.csproj", "{92D4CC5A-053B-4F47-9408-F10B8725810E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{92D4CC5A-053B-4F47-9408-F10B8725810E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{92D4CC5A-053B-4F47-9408-F10B8725810E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{92D4CC5A-053B-4F47-9408-F10B8725810E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{92D4CC5A-053B-4F47-9408-F10B8725810E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {19744695-138E-4F9A-BD1E-C5B369AE69B7}
+	EndGlobalSection
+EndGlobal
