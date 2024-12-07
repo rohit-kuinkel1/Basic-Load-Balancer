@@ -8,8 +8,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\SimpleServerSetup\SimpleServerSetup.csproj" />
-  </ItemGroup>
-
 </Project>
