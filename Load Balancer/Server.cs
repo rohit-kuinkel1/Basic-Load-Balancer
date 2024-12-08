@@ -1,4 +1,6 @@
-﻿namespace LoadBalancer
+﻿using Load_Balancer;
+
+namespace LoadBalancer
 {
     /// <summary>
     /// Represents a server with health and performance metrics.
@@ -16,16 +18,19 @@
             get => _activeConnections;
             private set => _activeConnections = value;
         }
-        public bool IsServerHealthy { get; private set; } = true;
+        public bool IsServerHealthy => CircuitBreaker.State == CircuitState.Closed || CircuitBreaker.State == CircuitState.HalfOpen;
         private int _requestCount;
         private int _failedRequests;
         private long _totalResponseTime;
         private int _consecutiveFailures;
 
-        public Server( string address, int port )
+        public CircuitBreaker CircuitBreaker { get; }
+
+        public Server( string address, int port, CircuitBreakerConfig breakerConfig )
         {
             ServerAddress = address;
             ServerPort = port;
+            CircuitBreaker = new CircuitBreaker( breakerConfig );
         }
 
         /// <summary>
@@ -39,6 +44,11 @@
             if( !success )
             {
                 Interlocked.Increment( ref _failedRequests );
+                CircuitBreaker.RecordFailure();
+            }
+            else
+            {
+                CircuitBreaker.RecordSuccess();
             }
 
             lock( this )
@@ -56,25 +66,37 @@
             {
                 ServerHealth = Math.Min( 100.0, ServerHealth + 10 );
                 _consecutiveFailures = 0;
-                IsServerHealthy = true;
+
+                // Ensure Circuit Breaker is marked as healthy
+                CircuitBreaker.RecordSuccess();
             }
             else
             {
                 _consecutiveFailures++;
+                CircuitBreaker.RecordFailure();
+
                 if( _consecutiveFailures >= 3 )
                 {
-                    IsServerHealthy = false;
+                    //prevent further requests from being sent
+                    CircuitBreaker.State = CircuitState.Open;
+
+                    if( _consecutiveFailures >= 5 )
+                    {
+                        Console.WriteLine( $"Server {ServerAddress}:{ServerPort} has failed too many times." );
+                    }
                 }
             }
         }
 
+
         /// <summary>
         /// Enables drain mode to gracefully shut down the server.
+        /// Marks the <see cref="CircuitBreaker"/> as failed when drained
         /// </summary>
         public void EnableDrainMode()
         {
-            IsServerHealthy = false;
             ServerHealth = 0;
+            CircuitBreaker.RecordFailure();
         }
     }
 }

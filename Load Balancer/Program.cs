@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Load_Balancer;
 
 namespace LoadBalancer
 {
@@ -10,14 +11,19 @@ namespace LoadBalancer
         {
             try
             {
-                using var httpClient = new HttpClient();
-                var roundRobinStrategy = new RoundRobinStrategy();
-                var loadBalancer = new LoadBalancer( roundRobinStrategy, httpClient );
+                var loadBalancer = new LoadBalancer( new RoundRobinStrategy(), new HttpClient() );
+
+                var circuitBreakerConfig = new CircuitBreakerConfig
+                {
+                    FailureThreshold = 3,
+                    ResetTimeout = TimeSpan.FromSeconds( 30 ),
+                    HalfOpenMaxAttempts = 2
+                };
 
                 //demo servers
-                loadBalancer.AddServer( new Server( "localhost", 5001 ) );
-                loadBalancer.AddServer( new Server( "localhost", 5002 ) );
-                loadBalancer.AddServer( new Server( "localhost", 5003 ) );
+                loadBalancer.AddServer( new Server( "localhost", 5001, circuitBreakerConfig ) );
+                loadBalancer.AddServer( new Server( "localhost", 5002, circuitBreakerConfig ) );
+                loadBalancer.AddServer( new Server( "localhost", 5003, circuitBreakerConfig ) );
 
                 _ = Task.Run( async () =>
                 {

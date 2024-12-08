@@ -9,9 +9,7 @@ namespace LoadBalancer
         private readonly HealthCheckService _healthCheckService;
         private readonly RequestHandler _requestHandler;
 
-        public LoadBalancer( ILoadBalancingStrategy loadBalancingStrategy,
-            HttpClient httpClient
-        )
+        public LoadBalancer( ILoadBalancingStrategy loadBalancingStrategy, HttpClient httpClient )
         {
             _loadBalancingStrategy = loadBalancingStrategy ?? throw new ArgumentNullException( nameof( loadBalancingStrategy ) );
             _healthCheckService = new HealthCheckService( httpClient );
@@ -24,14 +22,15 @@ namespace LoadBalancer
             Console.WriteLine( $"Server added: {server.ServerAddress}:{server.ServerPort}" );
         }
 
-        public void RemoveServer( IServer server )
+        public void RemoveServer( IServer iserver )
         {
-            if( server is Server server2 )
+            if( iserver is Server server )
             {
-                server2.EnableDrainMode();
+                Console.WriteLine( $"Initiating removal for server: {server.ServerAddress}:{server.ServerPort}" );
+                server.EnableDrainMode();
                 Task.Run( async () =>
                 {
-                    while( server2.ActiveConnections > 0 )
+                    while( server.ActiveConnections > 0 )
                     {
                         await Task.Delay( 50 );
                     }
@@ -55,8 +54,22 @@ namespace LoadBalancer
 
         public async Task PerformHealthChecksAsync()
         {
-            var tasks = _servers.Select( server => _healthCheckService.PerformHealthChecksAsync( server ) );
+            var tasks = _servers.Select( async iserver =>
+            {
+                await _healthCheckService.PerformHealthCheckAsync( iserver );
+
+                if(
+                    iserver is Server server
+                    && !server.IsServerHealthy
+                    && server.CircuitBreaker.State == Load_Balancer.CircuitState.Open
+                )
+                {
+                    RemoveServer( server );
+                }
+            } );
+
             await Task.WhenAll( tasks );
         }
+
     }
 }

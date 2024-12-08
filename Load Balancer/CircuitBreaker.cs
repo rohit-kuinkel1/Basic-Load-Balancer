@@ -20,7 +20,7 @@
         public CircuitState State
         {
             get => _state;
-            private set => _state = value;
+            internal set => _state = value;
         }
 
         public bool AllowRequest()
