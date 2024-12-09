@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AutoScaler")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e4c0edb22301a0332b7631e249a07056a95ac9c2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+88f3b9a38f0a4a5bf5e94ae6535dbf79b63b2341")]
 [assembly: System.Reflection.AssemblyProductAttribute("AutoScaler")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AutoScaler")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
