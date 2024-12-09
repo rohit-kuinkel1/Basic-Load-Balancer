@@ -12,12 +12,13 @@
 [Rr]elease/
 x64/
 [Bb]in/
-SimpleServerSetup/[Bb]in/
 [Oo]bj/
+SimpleServerSetup/[Bb]in/
 SimpleServerSetup/[Oo]bj/
 AutoScaler/[Bb]in/
-[Oo]bj/
 AutoScaler/[Oo]bj/
+
+
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
