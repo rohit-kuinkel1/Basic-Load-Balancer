@@ -10,7 +10,7 @@
         Fatal = 5
     }
 
-    public enum LogDestination
+    public enum LogSinks
     {
         Console = 0,
         File = 1,
