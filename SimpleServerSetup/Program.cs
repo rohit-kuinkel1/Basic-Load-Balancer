@@ -26,7 +26,12 @@ namespace SimpleServer
             app.MapGet( "/api", async ( IMetricsService metricsService ) =>
             {
                 await Task.Delay( metricsService.SimulateLatency() );
-                return Results.Ok( new { message = $"Response from server on port {builder.Configuration["urls"]}" } );
+                return Results.Ok(
+                    new
+                    {
+                        message = $"Response from server on port {builder.Configuration["urls"]}"
+                    }
+                );
             } );
 
             var port = args.Length > 0 ? args[0] : "5001";

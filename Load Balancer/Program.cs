@@ -8,7 +8,8 @@ namespace LoadBalancer
         {
             try
             {
-                Log.AddSink(LogSinks.Console);
+                Log.AddSink( LogSinks.Console );
+                Log.AddSink( LogSinks.File, Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Desktop ), "LoadBalancerLogs" ) );
 
                 var loadBalancer = new LoadBalancer(
                     new RoundRobinStrategy(),
@@ -35,8 +36,15 @@ namespace LoadBalancer
                 Log.Info( "Load Balancer started. Press Ctrl+C to exit." );
                 while( true )
                 {
-                    var result = await loadBalancer.SendRequestAsync();
-                    Log.Info( $"Request result: {( result ? "Success" : "Failed" )}" );
+                    if( await loadBalancer.SendRequestAsync() )
+                    {
+                        Log.Info( $"Request: OK" );
+                    }
+                    else
+                    {
+                        Log.Fatal( $"Request: Failed" );
+                    }
+
                     await Task.Delay( 1000 ); //simulate request interval
                 }
             }
