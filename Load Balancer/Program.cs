@@ -1,7 +1,4 @@
-﻿using System;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Load_Balancer;
+﻿using LoadBalancer.Logger;
 
 namespace LoadBalancer
 {
@@ -11,14 +8,14 @@ namespace LoadBalancer
         {
             try
             {
-                var loadBalancer = new LoadBalancer( new RoundRobinStrategy(), new HttpClient() );
+                Log.AddSink(LogSinks.Console);
 
-                var circuitBreakerConfig = new CircuitBreakerConfig
-                {
-                    FailureThreshold = 3,
-                    ResetTimeout = TimeSpan.FromSeconds( 30 ),
-                    HalfOpenMaxAttempts = 2
-                };
+                var loadBalancer = new LoadBalancer(
+                    new RoundRobinStrategy(),
+                    new HttpClient()
+                );
+
+                var circuitBreakerConfig = CircuitBreakerConfig.Factory();
 
                 //demo servers
                 loadBalancer.AddServer( new Server( "localhost", 5001, circuitBreakerConfig ) );
@@ -30,22 +27,22 @@ namespace LoadBalancer
                     while( true )
                     {
                         await loadBalancer.PerformHealthChecksAsync();
-                        await Task.Delay( TimeSpan.FromSeconds( 10 ) ); 
+                        await Task.Delay( TimeSpan.FromSeconds( 10 ) );
                     }
                 } );
 
                 //simulate incoming requests
-                Console.WriteLine( "Load Balancer started. Press Ctrl+C to exit." );
+                Log.Info( "Load Balancer started. Press Ctrl+C to exit." );
                 while( true )
                 {
                     var result = await loadBalancer.SendRequestAsync();
-                    Console.WriteLine( $"Request result: {( result ? "Success" : "Failed" )}" );
+                    Log.Info( $"Request result: {( result ? "Success" : "Failed" )}" );
                     await Task.Delay( 1000 ); //simulate request interval
                 }
             }
             catch( Exception ex )
             {
-                Console.WriteLine( $"An error occurred: {ex.Message}" );
+                Log.Error( "An error occurred", ex );
                 Environment.Exit( 1 );
             }
         }

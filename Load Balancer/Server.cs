@@ -1,4 +1,4 @@
-﻿using Load_Balancer;
+﻿using LoadBalancer.Logger;
 
 namespace LoadBalancer
 {
@@ -82,7 +82,7 @@ namespace LoadBalancer
 
                     if( _consecutiveFailures >= 5 )
                     {
-                        Console.WriteLine( $"Server {ServerAddress}:{ServerPort} has failed too many times." );
+                        Log.Info( $"Server {ServerAddress}:{ServerPort} has failed too many times." );
                     }
                 }
             }

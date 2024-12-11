@@ -1,4 +1,4 @@
-﻿namespace Load_Balancer
+﻿namespace LoadBalancer
 {
     public class CircuitBreaker
     {

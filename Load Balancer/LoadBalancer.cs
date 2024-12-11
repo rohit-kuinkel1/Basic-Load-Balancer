@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using LoadBalancer.Logger;
 
 namespace LoadBalancer
 {
@@ -19,14 +20,14 @@ namespace LoadBalancer
         public void AddServer( IServer server )
         {
             _servers.Add( server );
-            Console.WriteLine( $"Server added: {server.ServerAddress}:{server.ServerPort}" );
+            Log.Info( $"Server added: {server.ServerAddress}:{server.ServerPort}" );
         }
 
         public void RemoveServer( IServer iserver )
         {
             if( iserver is Server server )
             {
-                Console.WriteLine( $"Initiating removal for server: {server.ServerAddress}:{server.ServerPort}" );
+                Log.Info( $"Initiating removal for server: {server.ServerAddress}:{server.ServerPort}" );
                 server.EnableDrainMode();
                 Task.Run( async () =>
                 {
@@ -36,7 +37,7 @@ namespace LoadBalancer
                     }
 
                     _servers = new ConcurrentBag<IServer>( _servers.Where( s => s != server ) );
-                    Console.WriteLine( $"Server removed from pool: {server.ServerAddress}:{server.ServerPort}" );
+                    Log.Info( $"Server removed from pool: {server.ServerAddress}:{server.ServerPort}" );
                 } );
             }
         }
@@ -61,7 +62,7 @@ namespace LoadBalancer
                 if(
                     iserver is Server server
                     && !server.IsServerHealthy
-                    && server.CircuitBreaker.State == Load_Balancer.CircuitState.Open
+                    && server.CircuitBreaker.State == CircuitState.Open
                 )
                 {
                     RemoveServer( server );
