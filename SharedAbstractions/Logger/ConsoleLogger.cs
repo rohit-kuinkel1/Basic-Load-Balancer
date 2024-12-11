@@ -1,4 +1,4 @@
-﻿namespace LoadBalancer.Logging
+﻿namespace LoadBalancer.Logger
 {
     /// <summary>
     /// <see cref="ConsoleLogger"/> redirects the output to the <see cref="LogSinks.Console"/> for the tool.
@@ -18,7 +18,7 @@
             return level >= _minLevel;
         }
 
-        public void Log(LogLevel level, string message, Exception? exception = null)
+        public void Write(LogLevel level, string message, Exception? exception = null)
         {
             if (!ShouldLog(level))
             {
@@ -58,7 +58,7 @@
             {
                 LogLevel.Trace => Tuple.Create(ConsoleColor.Gray, ConsoleColor.Black),
                 LogLevel.Debug => Tuple.Create(ConsoleColor.DarkGray, ConsoleColor.Black),
-                LogLevel.Info => Tuple.Create(ConsoleColor.White, ConsoleColor.Black),
+                LogLevel.Info => Tuple.Create(ConsoleColor.Green, ConsoleColor.Black),
                 LogLevel.Warn => Tuple.Create(ConsoleColor.Yellow, ConsoleColor.Black),
                 LogLevel.Error => Tuple.Create(ConsoleColor.Red, ConsoleColor.Black),
                 LogLevel.Fatal => Tuple.Create(ConsoleColor.White, ConsoleColor.DarkRed),

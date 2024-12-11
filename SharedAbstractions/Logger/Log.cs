@@ -1,15 +1,15 @@
 ﻿using LoadBalancer.Exceptions;
 using System.Collections.Concurrent;
 
-namespace LoadBalancer.Logging
+namespace LoadBalancer.Logger
 {
-    public static class Logging
+    public static class Log
     {
         private static readonly ConcurrentDictionary<LogSinks, ILogger> _sinks = new();
         private static readonly object _lock = new();
         private static LogLevel _minimumLevel = LogLevel.Info;
 
-        static Logging()
+        static Log()
         {
             //add a default destination to the Console
             TryAddSink(LogSinks.Console, new ConsoleLogger(_minimumLevel));
@@ -20,7 +20,7 @@ namespace LoadBalancer.Logging
             _minimumLevel = level;
         }
 
-        private static void AddSink(LogSinks sink, string? targetDirectory = null)
+        public static void AddSink(LogSinks sink, string? targetDirectory = null)
         {
             switch (sink)
             {
@@ -64,7 +64,7 @@ namespace LoadBalancer.Logging
             }
         }
 
-        private static void Log(LogLevel level, string message, Exception? exception = null)
+        private static void Write(LogLevel level, string message, Exception? exception = null)
         {
             if (level < _minimumLevel)
             {
@@ -75,17 +75,17 @@ namespace LoadBalancer.Logging
             {
                 if (target.ShouldLog(level))
                 {
-                    target.Log(level, message, exception);
+                    target.Write(level, message, exception);
                 }
             }
         }
 
-        public static void Trace(string message) => Log(LogLevel.Trace, message);
-        public static void Debug(string message) => Log(LogLevel.Debug, message);
-        public static void Info(string message) => Log(LogLevel.Info, message);
-        public static void Warn(string message, Exception? ex = null) => Log(LogLevel.Warn, message, ex);
-        public static void Error(string message, Exception? ex = null) => Log(LogLevel.Error, message, ex);
-        public static void Fatal(string message, Exception? ex = null) => Log(LogLevel.Fatal, message, ex);
+        public static void Trace(string message) => Write(LogLevel.Trace, message);
+        public static void Debug(string message) => Write(LogLevel.Debug, message);
+        public static void Info(string message) => Write(LogLevel.Info, message);
+        public static void Warn(string message, Exception? ex = null) => Write(LogLevel.Warn, message, ex);
+        public static void Error(string message, Exception? ex = null) => Write(LogLevel.Error, message, ex);
+        public static void Fatal(string message, Exception? ex = null) => Write(LogLevel.Fatal, message, ex);
 
         public static void FlushLogger()
         {

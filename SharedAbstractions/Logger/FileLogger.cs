@@ -1,7 +1,7 @@
 ﻿using LoadBalancer.Exceptions;
 using System.Text;
 
-namespace LoadBalancer.Logging
+namespace LoadBalancer.Logger
 {
     public class FileLogger : ILogger
     {
@@ -71,7 +71,7 @@ namespace LoadBalancer.Logging
         {
             return level >= _minLevel;
         }
-        public void Log(LogLevel level, string message, Exception? exception = null)
+        public void Write(LogLevel level, string message, Exception? exception = null)
         {
             if (!ShouldLog(level))
             {

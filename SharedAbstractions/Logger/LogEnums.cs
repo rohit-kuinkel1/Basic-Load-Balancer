@@ -1,4 +1,4 @@
-﻿namespace LoadBalancer.Logging
+﻿namespace LoadBalancer.Logger
 {
     public enum LogLevel
     {
