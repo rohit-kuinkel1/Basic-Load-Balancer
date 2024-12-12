@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using LoadBalancer.Exceptions;
+using System.Net.Http;
 using LoadBalancer.Interfaces;
 using LoadBalancer.Logger;
 
@@ -7,7 +7,7 @@ namespace LoadBalancer
 {
     public class LoadBalancer : ILoadBalancer
     {
-        private ConcurrentBag<IServer> _servers = new();
+        private readonly ConcurrentBag<IServer> _servers = new();
         private readonly ILoadBalancingStrategy _loadBalancingStrategy;
         private readonly HealthCheckService _healthCheckService;
         private readonly RequestHandler _requestHandler;
@@ -18,53 +18,26 @@ namespace LoadBalancer
             HttpClient httpClient,
             AutoScalingConfig? autoScalingConfig = null )
         {
-            _loadBalancingStrategy = loadBalancingStrategy ?? throw new NullException( nameof( loadBalancingStrategy ) );
+            _loadBalancingStrategy = loadBalancingStrategy ?? throw new ArgumentNullException( nameof( loadBalancingStrategy ) );
             _healthCheckService = new HealthCheckService( httpClient );
             _requestHandler = new RequestHandler( httpClient );
 
+            // Initialize AutoScaler with internal server management methods
             _autoScaler = new AutoScaler(
                 autoScalingConfig ?? AutoScalingConfig.Factory(),
-                () => new Server( "localhost", GetNextAvailablePort(), CircuitBreakerConfig.Factory() ),
-                AddServer,
-                RemoveServer,
+                () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory() ),
+                server => _servers.Add( server ),
+                server => RemoveUnhealthyServer( server ),
                 () => _servers.Count
             );
 
             _autoScaler.Initialize();
         }
 
-        private static int _nextPort = 5001;
-        private static int GetNextAvailablePort() => _nextPort++;
-
-        public async Task<bool> HandleRequestAsync( HttpRequest request )
+        public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
         {
             _autoScaler.TrackRequest( DateTime.UtcNow );
             return await SendRequestAsync();
-        }
-
-        public void AddServer( IServer server )
-        {
-            _servers.Add( server );
-            Log.Info( $"Server added: {server.ServerAddress}:{server.ServerPort}" );
-        }
-
-        public void RemoveServer( IServer iserver )
-        {
-            if( iserver is Server server )
-            {
-                Log.Info( $"Initiating removal for server: {server.ServerAddress}:{server.ServerPort}" );
-                server.EnableDrainMode();
-                Task.Run( async () =>
-                {
-                    while( server.ActiveConnections > 0 )
-                    {
-                        await Task.Delay( 50 );
-                    }
-
-                    _servers = new ConcurrentBag<IServer>( _servers.Where( s => s != server ) );
-                    Log.Info( $"Server removed from pool: {server.ServerAddress}:{server.ServerPort}" );
-                } );
-            }
         }
 
         public async Task<bool> SendRequestAsync()
@@ -80,21 +53,46 @@ namespace LoadBalancer
 
         public async Task PerformHealthChecksAsync()
         {
-            var tasks = _servers.Select( async iserver =>
+            var tasks = _servers.Select( async server =>
             {
-                await _healthCheckService.PerformHealthCheckAsync( iserver );
+                await _healthCheckService.PerformHealthCheckAsync( server );
 
-                if(
-                    iserver is Server server
-                    && !server.IsServerHealthy
-                    && server.CircuitBreaker.State == CircuitState.Open
-                )
+                if( !server.IsServerHealthy && server is Server s && s.CircuitBreaker.State == CircuitState.Open )
                 {
-                    RemoveServer( server );
+                    RemoveUnhealthyServer( server );
                 }
             } );
 
             await Task.WhenAll( tasks );
         }
+
+        private void RemoveUnhealthyServer( IServer iserver )
+        {
+            if( iserver is Server server )
+            {
+                Log.Info( $"Initiating removal for unhealthy server: {server.ServerAddress}:{server.ServerPort}" );
+                server.EnableDrainMode();
+
+                Task.Run( async () =>
+                {
+                    while( server.ActiveConnections > 0 )
+                    {
+                        await Task.Delay( 50 );
+                    }
+
+                    var filteredServers = _servers.Where( srv => srv != server ).ToList();
+                    var newBag = new ConcurrentBag<IServer>( filteredServers );
+
+                    foreach( var srv in newBag )
+                    {
+                        _servers.Add( srv );
+                    }
+
+                    PortUtils.ReleasePort( server.ServerPort );
+                    Log.Warn( $"Server removed from pool: {server.ServerAddress}:{server.ServerPort}" );
+                } );
+            }
+        }
+
     }
 }

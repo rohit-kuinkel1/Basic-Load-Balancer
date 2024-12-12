@@ -1,5 +1,5 @@
-﻿using LoadBalancer.Logger;
-using LoadBalancer.Interfaces;
+﻿using LoadBalancer.Exceptions;
+using LoadBalancer.Logger;
 
 namespace LoadBalancer
 {
@@ -9,19 +9,23 @@ namespace LoadBalancer
         {
             try
             {
-                Log.AddSink( LogSinks.ConsoleAndFile, Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Desktop ), "LoadBalancerLogs" ) );
+                Log.AddSink( LogSinks.ConsoleAndFile,
+                    Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Desktop ), "LoadBalancerLogs" ) );
+
+                var autoScalingConfig = new AutoScalingConfig
+                {
+                    MinServers = 2,
+                    MaxServers = 5,
+                    RequestThresholdForScaleUp = 50,
+                    RequestThresholdForScaleDown = 10,
+                    ScaleCheckIntervalSec = TimeSpan.FromSeconds( 30 )
+                };
 
                 var loadBalancer = new LoadBalancer(
                     new RoundRobinStrategy(),
-                    new HttpClient()
+                    new HttpClient(),
+                    autoScalingConfig
                 );
-
-                var circuitBreakerConfig = CircuitBreakerConfig.Factory();
-
-                //demo servers
-                loadBalancer.AddServer( new Server( "localhost", 5001, circuitBreakerConfig ) );
-                loadBalancer.AddServer( new Server( "localhost", 5002, circuitBreakerConfig ) );
-                loadBalancer.AddServer( new Server( "localhost", 5003, circuitBreakerConfig ) );
 
                 _ = Task.Run( async () =>
                 {
@@ -33,10 +37,13 @@ namespace LoadBalancer
                 } );
 
                 //simulate incoming requests
-                Log.Info( "Load Balancer started. Press Ctrl+C to exit." );
+                Log.Info( "Load Balancer started with auto-scaling enabled. Press Ctrl+C to exit." );
+
+                var dummyRequest = new HttpRequestMessage( HttpMethod.Get, "http://localhost" );
+
                 while( true )
                 {
-                    if( await loadBalancer.SendRequestAsync() )
+                    if( await loadBalancer.HandleRequestAsync( dummyRequest ) )
                     {
                         Log.Info( $"Request: OK" );
                     }
@@ -45,10 +52,12 @@ namespace LoadBalancer
                         Log.Fatal( $"Request: Failed" );
                     }
 
-                    await Task.Delay( 1000 ); //simulate request interval
+                    //simulate varying load by randomizing request intervals
+                    var randomDelay = Random.Shared.Next( 50, 2000 );
+                    await Task.Delay( randomDelay );
                 }
             }
-            catch( Exception ex )
+            catch( Exception ex ) when (ex is LoadBalancerException)
             {
                 Log.Error( "An error occurred", ex );
                 Environment.Exit( 1 );

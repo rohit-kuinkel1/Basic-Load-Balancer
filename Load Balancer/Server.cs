@@ -84,7 +84,7 @@ namespace LoadBalancer
 
                     if( _consecutiveFailures >= 5 )
                     {
-                        Log.Info( $"Server {ServerAddress}:{ServerPort} has failed too many times." );
+                        Log.Fatal( $"Server {ServerAddress}:{ServerPort} has failed too many times." );
                     }
                 }
             }
