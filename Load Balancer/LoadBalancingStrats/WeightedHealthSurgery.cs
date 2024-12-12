@@ -1,4 +1,6 @@
-﻿namespace LoadBalancer
+﻿using LoadBalancer.Interfaces;
+
+namespace LoadBalancer
 {
     public class WeightedHealthStrategy : ILoadBalancingStrategy
     {

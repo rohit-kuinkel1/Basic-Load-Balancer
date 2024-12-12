@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using LoadBalancer.Logger;
+using LoadBalancer.Interfaces;
 
 namespace LoadBalancer
 {

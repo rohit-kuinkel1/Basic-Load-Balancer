@@ -1,5 +1,7 @@
 ﻿using LoadBalancer.Logger;
 
+using LoadBalancer.Interfaces;
+
 namespace LoadBalancer
 {
     /// <summary>

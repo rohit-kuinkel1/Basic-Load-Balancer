@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Net.Http;
 using Microsoft.AspNetCore.Http;
-using SimpleServer.Services;
+using SimpleServer.Interfaces;
 
 namespace SimpleServer.Middleware;
 

@@ -1,37 +1,40 @@
-﻿namespace SimpleServer.Services;
+﻿using SimpleServer.Interfaces;
 
-public class MetricsService : IMetricsService
+namespace SimpleServer
 {
-    private readonly Queue<long> _responseTimes = new();
-    private readonly object _lock = new();
-    private readonly Random _random = new();
-    private const int MAX_SAMPLES = 100;
-
-    public void RecordRequest(long durationMs)
+    public class MetricsService : IMetricsService
     {
-        lock (_lock)
+        private readonly Queue<long> _responseTimes = new();
+        private readonly object _lock = new();
+        private readonly Random _random = new();
+        private const int MAX_SAMPLES = 100;
+
+        public void RecordRequest( long durationMs )
         {
-            _responseTimes.Enqueue(durationMs);
-            if (_responseTimes.Count > MAX_SAMPLES)
+            lock( _lock )
             {
-                _responseTimes.Dequeue();
+                _responseTimes.Enqueue( durationMs );
+                if( _responseTimes.Count > MAX_SAMPLES )
+                {
+                    _responseTimes.Dequeue();
+                }
             }
         }
-    }
 
-    public int SimulateLatency()
-    {
-        //simulate varying response times between 50-200ms
-        return _random.Next(50, 200);
-    }
-
-    public double GetAverageResponseTime()
-    {
-        lock (_lock)
+        public int SimulateLatency()
         {
-            return _responseTimes.Any()
-                ? _responseTimes.Average()
-                : 100; //default average if no requests yet
+            //simulate varying response times between 50-200ms
+            return _random.Next( 50, 200 );
+        }
+
+        public double GetAverageResponseTime()
+        {
+            lock( _lock )
+            {
+                return _responseTimes.Any()
+                    ? _responseTimes.Average()
+                    : 100; //default average if no requests yet
+            }
         }
     }
 }

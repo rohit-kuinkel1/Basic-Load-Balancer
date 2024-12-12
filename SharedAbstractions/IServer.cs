@@ -1,4 +1,4 @@
-﻿namespace LoadBalancer
+﻿namespace LoadBalancer.Interfaces
 {
     public interface IServer
     {
@@ -6,7 +6,7 @@
         int ServerPort { get; }
         bool IsServerHealthy { get; }
         double ServerHealth { get; }
-        void RecordRequest( bool success, long responseTimeMs );
-        void UpdateHealthStatus( bool isHealthy );
+        void RecordRequest(bool success, long responseTimeMs);
+        void UpdateHealthStatus(bool isHealthy);
     }
 }

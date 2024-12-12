@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using SimpleServer.Middleware;
-using SimpleServer.Services;
+using SimpleServer.Interfaces;
 
 
 namespace SimpleServer
