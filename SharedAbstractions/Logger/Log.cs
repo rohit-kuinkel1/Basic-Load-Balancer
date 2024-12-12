@@ -34,7 +34,7 @@ namespace LoadBalancer.Logger
                         TryAddSink(sink, new FileLogger(targetDirectory, _minimumLevel));
                         break;
                     }
-                    throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException));
+                    throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException), "LB-DIR-001");
 
                 case LogSinks.ConsoleAndFile:
                     if (!string.IsNullOrWhiteSpace(targetDirectory))
@@ -43,10 +43,10 @@ namespace LoadBalancer.Logger
                         TryAddSink(LogSinks.File, new FileLogger(targetDirectory, _minimumLevel));
                         break;
                     }
-                    throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException));
+                    throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException), "LB-DIR-001");
 
                 default:
-                    throw new LoadBalancerException($"Unsupported log sink type: {sink}", typeof(NotSupportedException));
+                    throw new LoadBalancerException($"Unsupported log sink type: {sink}", typeof(NotSupportedException), "LB-LOGIC-001");
             }
         }
 

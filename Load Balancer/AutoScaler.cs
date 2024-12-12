@@ -42,7 +42,7 @@ namespace LoadBalancer
                 while( true )
                 {
                     await MonitorAndScaleAsync();
-                    await Task.Delay( _config.ScaleCheckInterval );
+                    await Task.Delay( _config.ScaleCheckIntervalSec );
                 }
             } );
         }
