@@ -1,5 +1,4 @@
-﻿using System;
-namespace LoadBalancer.Exceptions
+﻿namespace LoadBalancer.Exceptions
 {
     /// <summary>
     /// Base exception class for all load balancer related exceptions
@@ -31,11 +30,11 @@ namespace LoadBalancer.Exceptions
             ErrorCode = errorCode;
         }
 
-        public LoadBalancerException(string message, Type exception)
+        public LoadBalancerException(string message, Type exception, string? errorCode)
             : base(message)
         {
             Timestamp = DateTime.UtcNow;
-            ErrorCode = "LB-ARG-001";
+            ErrorCode = errorCode ?? "LB-ARG-001";
         }
 
         public LoadBalancerException(string message, string errorCode, Exception innerException)

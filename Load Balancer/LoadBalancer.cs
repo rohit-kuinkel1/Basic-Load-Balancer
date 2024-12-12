@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
-using LoadBalancer.Logger;
+using LoadBalancer.Exceptions;
 using LoadBalancer.Interfaces;
+using LoadBalancer.Logger;
 
 namespace LoadBalancer
 {
@@ -10,12 +11,35 @@ namespace LoadBalancer
         private readonly ILoadBalancingStrategy _loadBalancingStrategy;
         private readonly HealthCheckService _healthCheckService;
         private readonly RequestHandler _requestHandler;
+        private readonly IAutoScaler _autoScaler;
 
-        public LoadBalancer( ILoadBalancingStrategy loadBalancingStrategy, HttpClient httpClient )
+        public LoadBalancer(
+            ILoadBalancingStrategy loadBalancingStrategy,
+            HttpClient httpClient,
+            AutoScalingConfig? autoScalingConfig = null )
         {
-            _loadBalancingStrategy = loadBalancingStrategy ?? throw new ArgumentNullException( nameof( loadBalancingStrategy ) );
+            _loadBalancingStrategy = loadBalancingStrategy ?? throw new NullException( nameof( loadBalancingStrategy ) );
             _healthCheckService = new HealthCheckService( httpClient );
             _requestHandler = new RequestHandler( httpClient );
+
+            _autoScaler = new AutoScaler(
+                autoScalingConfig ?? AutoScalingConfig.Factory(),
+                () => new Server( "localhost", GetNextAvailablePort(), CircuitBreakerConfig.Factory() ),
+                AddServer,
+                RemoveServer,
+                () => _servers.Count
+            );
+
+            _autoScaler.Initialize();
+        }
+
+        private static int _nextPort = 5001;
+        private static int GetNextAvailablePort() => _nextPort++;
+
+        public async Task<bool> HandleRequestAsync( HttpRequest request )
+        {
+            _autoScaler.TrackRequest( DateTime.UtcNow );
+            return await SendRequestAsync();
         }
 
         public void AddServer( IServer server )
@@ -72,6 +96,5 @@ namespace LoadBalancer
 
             await Task.WhenAll( tasks );
         }
-
     }
 }
