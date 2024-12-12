@@ -8,8 +8,7 @@ namespace LoadBalancer
         {
             try
             {
-                Log.AddSink( LogSinks.Console );
-                Log.AddSink( LogSinks.File, Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Desktop ), "LoadBalancerLogs" ) );
+                Log.AddSink( LogSinks.ConsoleAndFile, Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Desktop ), "LoadBalancerLogs" ) );
 
                 var loadBalancer = new LoadBalancer(
                     new RoundRobinStrategy(),
