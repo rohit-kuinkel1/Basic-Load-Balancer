@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using LoadBalancer.Exceptions;
 using LoadBalancer.Interfaces;
 using LoadBalancer.Logger;
@@ -12,14 +13,14 @@ namespace LoadBalancer
         private readonly object _scalingLock = new object();
         private readonly Func<Server> _serverFactory;
         private readonly Action<IServer> _addServerCallback;
-        private readonly Action<IServer> _removeServerCallback;
+        private readonly Action _removeServerCallback;
         private readonly Func<int> _getCurrentServerCount;
 
         public AutoScaler(
             AutoScalingConfig config,
             Func<Server> serverFactory,
             Action<IServer> addServerCallback,
-            Action<IServer> removeServerCallback,
+            Action removeServerCallback,
             Func<int> getCurrentServerCount )
         {
             _config = config ?? throw new ArgumentNullException( nameof( config ) );
@@ -31,13 +32,11 @@ namespace LoadBalancer
 
         public void Initialize()
         {
-            // Initialize minimum number of servers
             for( int i = 0; i < _config.MinServers; i++ )
             {
                 SpawnNewServer();
             }
 
-            // Start auto-scaling monitoring
             Task.Run( async () =>
             {
                 while( true )
@@ -47,6 +46,7 @@ namespace LoadBalancer
                 }
             } );
         }
+
 
         public void TrackRequest( DateTime timestamp )
         {
@@ -97,33 +97,48 @@ namespace LoadBalancer
                 }
                 else if( ShouldScaleDown( recentRequests, currentServerCount ) )
                 {
-                    var newServer = _serverFactory();
-                    _removeServerCallback( newServer );
+                    _removeServerCallback();
                     Log.Info( $"Scaling down: Removed server. Total servers: {currentServerCount - 1}" );
                 }
             }
         }
 
         private bool ShouldScaleUp( int recentRequests, int currentServerCount )
-            => recentRequests > _config.RequestThresholdForScaleUp &&
+            => recentRequests > _config.MaxRequestThresholdForScaleUp &&
                currentServerCount < _config.MaxServers;
 
         private bool ShouldScaleDown( int recentRequests, int currentServerCount )
-            => recentRequests < _config.RequestThresholdForScaleDown &&
+            => recentRequests < _config.MinRequestThresholdForScaleDown &&
                currentServerCount > _config.MinServers;
 
         private void SpawnNewServer()
         {
+            var port = PortUtils.FindAvailablePort();
+            var scriptPath = @"D:\git\Basic-Load-Balancer\SimpleServerSetup\start_servers.ps1";
             try
             {
-                var port = PortUtils.FindAvailablePort();
-                var newServer = new Server( "localhost", port, CircuitBreakerConfig.Factory() );
-                _addServerCallback( newServer );
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-File \"{scriptPath}\" -Port {port}",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                process.Start();
+
+                Log.Info( $"Spawing up a new server instance localhost:{port}" );
+                var server = new Server( "localhost", port, CircuitBreakerConfig.Factory() );
+                _addServerCallback( server );
             }
-            catch( Exception ex ) when( ex is LoadBalancerException )
+            catch( Exception ex ) when( ex is TimeoutException or LoadBalancerException )
             {
-                Log.Error( "Failed to spawn new server", ex );
-                throw;
+                {
+                    Log.Error( $"Failed to spawn a new server on port {port}: {ex.Message}" );
+                    PortUtils.ReleasePort( port );
+                }
             }
         }
     }

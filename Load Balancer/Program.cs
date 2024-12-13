@@ -9,32 +9,23 @@ namespace LoadBalancer
         {
             try
             {
-                Log.AddSink( LogSinks.ConsoleAndFile,
-                    Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.Desktop ), "LoadBalancerLogs" ) );
-
-                var autoScalingConfig = new AutoScalingConfig
-                {
-                    MinServers = 2,
-                    MaxServers = 5,
-                    RequestThresholdForScaleUp = 50,
-                    RequestThresholdForScaleDown = 10,
-                    ScaleCheckIntervalSec = TimeSpan.FromSeconds( 30 )
-                };
-
-                var loadBalancer = new LoadBalancer(
-                    new RoundRobinStrategy(),
-                    new HttpClient(),
-                    autoScalingConfig
+                Log.AddSink(
+                    LogSinks.ConsoleAndFile,
+                    Path.Combine(
+                        Environment.GetFolderPath( Environment.SpecialFolder.Desktop ),
+                        "LoadBalancerLogs"
+                    )
                 );
 
-                _ = Task.Run( async () =>
-                {
-                    while( true )
-                    {
-                        await loadBalancer.PerformHealthChecksAsync();
-                        await Task.Delay( TimeSpan.FromSeconds( 10 ) );
-                    }
-                } );
+                var autoScalingConfig = AutoScalingConfig.Factory();
+
+                var loadBalancer = new LoadBalancer(
+                                        loadBalancingStrategy: new RoundRobinStrategy(),
+                                        httpClient: new HttpClient(),
+                                        enabledAutoScaling: true,
+                                        autoScalingConfig: autoScalingConfig,
+                                        minHealthThreshold: 90
+                );
 
                 //simulate incoming requests
                 Log.Info( "Load Balancer started with auto-scaling enabled. Press Ctrl+C to exit." );
@@ -43,7 +34,8 @@ namespace LoadBalancer
 
                 while( true )
                 {
-                    if( await loadBalancer.HandleRequestAsync( dummyRequest ) )
+                    var wasRequestHandled = await loadBalancer.HandleRequestAsync( dummyRequest );
+                    if( wasRequestHandled )
                     {
                         Log.Info( $"Request: OK" );
                     }
@@ -57,7 +49,7 @@ namespace LoadBalancer
                     await Task.Delay( randomDelay );
                 }
             }
-            catch( Exception ex ) when (ex is LoadBalancerException)
+            catch( Exception ex ) when( ex is LoadBalancerException )
             {
                 Log.Error( "An error occurred", ex );
                 Environment.Exit( 1 );

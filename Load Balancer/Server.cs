@@ -11,7 +11,7 @@ namespace LoadBalancer
     {
         public string ServerAddress { get; }
         public int ServerPort { get; }
-        public double ServerHealth { get; private set; } = 100.0;
+        public double ServerHealth { get; set; } = 100.0;
         public double AverageResponseTimeMs { get; private set; } = 50;
 
         internal int _activeConnections;
