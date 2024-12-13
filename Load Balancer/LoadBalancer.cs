@@ -34,7 +34,7 @@ namespace LoadBalancer
                 _autoScaler =
                     new AutoScaler(
                         autoScalingConfig ?? AutoScalingConfig.Factory(),
-                        () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory() ),
+                        () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory(), maxCapacityInPercentage: 50, totalConnections: 100 ),
                         server => _servers.Add( server ),
                         RemoveUnhealthyServer,
                         () => _servers.Count
@@ -61,7 +61,7 @@ namespace LoadBalancer
             _healthCheckTimer.Start();
 
             //simulate health decrease
-            StartHealthDecrementTask( 0.1 );
+            StartHealthDecrementTask( 0.01 );
         }
 
         public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
@@ -75,12 +75,6 @@ namespace LoadBalancer
             var availableServers = _servers
                 .Where( server => server.CanHandleRequest( 1 ) )
                 .ToList();
-
-            if( !availableServers.Any() )
-            {
-                _autoScaler?.MonitorAndScaleAsync();
-                return false;
-            }
 
             var server = _loadBalancingStrategy.SelectServer( availableServers );
             if( server == null )
@@ -163,7 +157,7 @@ namespace LoadBalancer
                 }
 
                 PortUtils.ReleasePort( serverToRemove.ServerPort );
-                Log.Warn( $"Server removed from pool: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
+                Log.Warn( $"Server removed from pool with port release: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
             } );
         }
 

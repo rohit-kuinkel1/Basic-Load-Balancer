@@ -14,8 +14,12 @@ namespace LoadBalancer
         {
             lock (_portLock)
             {
-                for (int port = startPort; port <= endPort; port++)
+                Random random = new Random();
+                int attemptCount = 0;
+                while (attemptCount < (endPort - startPort)) 
                 {
+                    int port = random.Next(startPort, endPort + 1);
+
                     if (_allocatedPorts.Contains(port))
                     {
                         Log.Debug($"Port {port} is already taken by LoadBalancer, searching for a new one...");
@@ -28,11 +32,14 @@ namespace LoadBalancer
                         Log.Debug($"Port {port} is now taken by LoadBalancer");
                         return port;
                     }
+
+                    attemptCount++;
                 }
 
                 throw new InvalidOperationException($"No available ports were found in the specified range of {startPort} to {endPort}");
             }
         }
+
 
         public static void ReleasePort(int port)
         {

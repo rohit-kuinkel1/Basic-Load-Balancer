@@ -42,7 +42,7 @@ namespace LoadBalancer
                 while( true )
                 {
                     await MonitorAndScaleAsync();
-                    await Task.Delay( _config.ScaleCheckIntervalSec );
+                    await Task.Delay( _config.ScaleCheckIntervalMs );
                 }
             } );
         }
@@ -63,7 +63,7 @@ namespace LoadBalancer
             {
                 var currentTime = DateTime.UtcNow;
                 var recentRequests = _requestMetrics
-                    .Where( kvp => kvp.Key > currentTime.AddSeconds( -30 ) )
+                    .Where( kvp => kvp.Key > currentTime.AddSeconds( -5 ) )
                     .Sum( kvp => kvp.Value );
                 Log.Debug( $"Number of recent requests in the last 30 seconds were {recentRequests}" );
 
@@ -90,8 +90,8 @@ namespace LoadBalancer
             lock( _scalingLock )
             {
                 var currentServerCount = _getCurrentServerCount();
-
-                if( ShouldScaleUp( recentRequests, currentServerCount ) )
+                var isScalingUpNecessary = ShouldScaleUp( recentRequests, currentServerCount );
+                if( isScalingUpNecessary )
                 {
                     SpawnNewServer();
                     Log.Info( $"Scaling up: Added new server. Total servers: {currentServerCount + 1}" );

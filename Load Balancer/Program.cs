@@ -28,11 +28,12 @@ namespace LoadBalancer
                                         minHealthThreshold: 90
                 );
 
+
                 List<(int DurationInSeconds, int RequestsPerSecond)> TrafficPatterns = new()
                 {
-                    (20, 4),
+                    (5, 1),
                     (5, 1000), 
-                    (9, 4000),    
+                    (9, 40000),    
                     (5, 20000),                
                 };
 
@@ -74,7 +75,7 @@ namespace LoadBalancer
                     } ) );
                 }
 
-                await Task.Delay( 1000 ); //pause for 1 sec to maintain the RPS
+                await Task.Delay( 2000 );
             }
 
             await Task.WhenAll( tasks );
