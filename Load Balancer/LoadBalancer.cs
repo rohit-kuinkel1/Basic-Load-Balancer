@@ -20,7 +20,7 @@ namespace LoadBalancer
             bool enabledAutoScaling = false,
             AutoScalingConfig? autoScalingConfig = null,
             TimeSpan healthCheckInterval = default,
-            int minHealthThreshold = 70)
+            int minHealthThreshold = 70 )
         {
             _loadBalancingStrategy = loadBalancingStrategy ?? throw new ArgumentNullException( nameof( loadBalancingStrategy ) );
             _healthCheckService = new HealthCheckService( httpClient );
@@ -35,12 +35,19 @@ namespace LoadBalancer
                     () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory() ),
                     server => _servers.Add( server ),
                     RemoveUnhealthyServer,
-                    () => _servers.Count );
+                    () => _servers.Count,
+                    _servers);
 
                 _autoScaler.Initialize();
+
+                Log.Info( "Load Balancer started with auto-scaling enabled. Press Ctrl+C to exit." );
+            }
+            else
+            {
+                Log.Warn( "Load Balancer started without auto-scaling enabled.Press Ctrl+C to exit." );
             }
 
-            
+
             //for now we use a "dummy" health check, meaning do the health check in X time interval
             //this will be replaced later on with a smarter algorithm that will know when to do the checks
             _healthCheckTimer = new System.Timers.Timer
@@ -53,7 +60,7 @@ namespace LoadBalancer
             _healthCheckTimer.Start();
 
             //simulate health decrease
-            StartHealthDecrementTask( 1 );
+            StartHealthDecrementTask( 0.1 );
         }
 
         public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
@@ -64,7 +71,17 @@ namespace LoadBalancer
 
         public async Task<bool> SendRequestAsync()
         {
-            var server = _loadBalancingStrategy.SelectServer( _servers );
+            var availableServers = _servers
+                .Where( server => server.CanHandleRequest( 1 ) )
+                .ToList();
+
+            if( !availableServers.Any() )
+            {
+                _autoScaler?.ScaleUp();
+                return false;
+            }
+
+            var server = _loadBalancingStrategy.SelectServer( availableServers );
             if( server == null )
             {
                 return false;
@@ -73,10 +90,12 @@ namespace LoadBalancer
             return await _requestHandler.SendRequestAsync( server );
         }
 
+
+
         /// <summary>
         /// dummy health decreaser for now
         /// </summary>
-        private void StartHealthDecrementTask( int timeInMinutes = 10 )
+        private void StartHealthDecrementTask( double timeInMinutes = 10 )
         {
             Task.Run( async () =>
             {
@@ -114,7 +133,7 @@ namespace LoadBalancer
         {
             var serverToRemove = _servers
                 .OfType<Server>()
-                .Where( server => server.ServerHealth < 80 ) 
+                .Where( server => server.ServerHealth < 80 )
                 .OrderBy( server => server.ServerHealth )
                 .FirstOrDefault();
 

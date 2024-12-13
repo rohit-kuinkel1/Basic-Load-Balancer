@@ -1,18 +1,16 @@
-﻿using LoadBalancer.Logger;
-
-using LoadBalancer.Interfaces;
+﻿using LoadBalancer.Interfaces;
+using LoadBalancer.Logger;
 
 namespace LoadBalancer
 {
-    /// <summary>
-    /// Represents a server with health and performance metrics.
-    /// </summary>
     public class Server : IServer
     {
         public string ServerAddress { get; }
         public int ServerPort { get; }
         public double ServerHealth { get; set; } = 100.0;
-        public double AverageResponseTimeMs { get; private set; } = 50;
+        public double AverageResponseTimeMs { get; private set; } = 20;
+        public int MaxCapacity { get; }
+        public int CurrentLoad { get; private set; }
 
         internal int _activeConnections;
         public int ActiveConnections
@@ -20,7 +18,10 @@ namespace LoadBalancer
             get => _activeConnections;
             private set => _activeConnections = value;
         }
-        public bool IsServerHealthy => CircuitBreaker.State == CircuitState.Closed || CircuitBreaker.State == CircuitState.HalfOpen;
+
+        public bool IsServerHealthy => CircuitBreaker.State == CircuitState.Closed ||
+                                     CircuitBreaker.State == CircuitState.HalfOpen;
+
         private int _requestCount;
         private int _failedRequests;
         private long _totalResponseTime;
@@ -28,11 +29,29 @@ namespace LoadBalancer
 
         public CircuitBreaker CircuitBreaker { get; }
 
-        public Server( string address, int port, CircuitBreakerConfig breakerConfig )
+        public Server( string address, int port, CircuitBreakerConfig breakerConfig, int maxCapacity = 100 )
         {
             ServerAddress = address;
             ServerPort = port;
             CircuitBreaker = new CircuitBreaker( breakerConfig );
+            MaxCapacity = maxCapacity;
+        }
+
+        public bool CanHandleRequest( int requestCount )
+        {
+            return CurrentLoad + requestCount <= ( MaxCapacity * 0.9 ); //only use up to 90% of capacity
+        }
+
+        public void AddLoad( int requestCount )
+        {
+            Interlocked.Add( ref _activeConnections, requestCount );
+            CurrentLoad += requestCount;
+        }
+
+        public void RemoveLoad( int requestCount )
+        {
+            Interlocked.Add( ref _activeConnections, -requestCount );
+            CurrentLoad = Math.Max( 0, CurrentLoad - requestCount );
         }
 
         /// <summary>

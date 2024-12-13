@@ -4,6 +4,8 @@
     {
         void Initialize();
         void TrackRequest(DateTime timestamp);
+
+        void ScaleUp();
         Task MonitorAndScaleAsync();
     }
 }

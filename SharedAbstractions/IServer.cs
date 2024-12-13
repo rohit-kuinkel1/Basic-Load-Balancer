@@ -6,6 +6,11 @@
         int ServerPort { get; }
         bool IsServerHealthy { get; }
         double ServerHealth { get; set; }
+        int MaxCapacity { get; }
+        int CurrentLoad { get; }
+        bool CanHandleRequest(int requestCount);
+        void AddLoad(int requestCount);
+        void RemoveLoad(int requestCount);
         void RecordRequest(bool success, long responseTimeMs);
         void UpdateHealthStatus(bool isHealthy);
     }

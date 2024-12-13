@@ -27,26 +27,19 @@ namespace LoadBalancer
                                         minHealthThreshold: 90
                 );
 
-                //simulate incoming requests
-                Log.Info( "Load Balancer started with auto-scaling enabled. Press Ctrl+C to exit." );
-
                 var dummyRequest = new HttpRequestMessage( HttpMethod.Get, "http://localhost" );
 
-                while( true )
+                List<(int DurationInSeconds, int RequestsPerSecond)> TrafficPatterns = new()
                 {
-                    var wasRequestHandled = await loadBalancer.HandleRequestAsync( dummyRequest );
-                    if( wasRequestHandled )
-                    {
-                        Log.Info( $"Request: OK" );
-                    }
-                    else
-                    {
-                        Log.Fatal( $"Request: Failed" );
-                    }
+                    (20, 1000), // High load: 1000 req/sec for 30 seconds
+                    (9, 40),    // Low load: 40 req/sec for 9 seconds
+                    (15, 200),  // Moderate load: 200 req/sec for 15 seconds
+                    (20, 500),  // Burst: 500 req/sec for 20 seconds
+                };
 
-                    //simulate varying load by randomizing request intervals
-                    var randomDelay = Random.Shared.Next( 50, 2000 );
-                    await Task.Delay( randomDelay );
+                foreach( var pattern in TrafficPatterns )
+                {
+                    await SimulateTraffic( loadBalancer, pattern.RequestsPerSecond, pattern.DurationInSeconds );
                 }
             }
             catch( Exception ex ) when( ex is LoadBalancerException )
@@ -54,6 +47,39 @@ namespace LoadBalancer
                 Log.Error( "An error occurred", ex );
                 Environment.Exit( 1 );
             }
+        }
+
+        private static async Task SimulateTraffic( LoadBalancer loadBalancer, int requestsPerSecond, int durationInSeconds )
+        {
+            Log.Info( $"Simulating traffic: {requestsPerSecond} requests/second for {durationInSeconds} seconds." );
+
+            var tasks = new List<Task>();
+            var endTime = DateTime.UtcNow.AddSeconds( durationInSeconds );
+
+            while( DateTime.UtcNow < endTime )
+            {
+                for( int i = 0; i < requestsPerSecond; i++ )
+                {
+                    tasks.Add( Task.Run( async () =>
+                    {
+                        var dummyRequest = new HttpRequestMessage( HttpMethod.Get, "http://localhost" );
+                        var wasRequestHandled = await loadBalancer.HandleRequestAsync( dummyRequest );
+                        if( wasRequestHandled )
+                        {
+                            Log.Info( "Request: OK" );
+                        }
+                        else
+                        {
+                            Log.Fatal( "Request: Failed" );
+                        }
+                    } ) );
+                }
+
+                await Task.Delay( 1000 ); //pause for 1 sec to maintain the RPS
+            }
+
+            await Task.WhenAll( tasks );
+            Log.Info( $"Finished traffic simulation: {requestsPerSecond} requests/second." );
         }
     }
 }

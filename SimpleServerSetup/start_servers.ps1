@@ -1,5 +1,11 @@
 param (
-    [int]$Port
+    [int]$Port = 5001
 )
+$ProjectPath = "D:\git\Basic-Load-Balancer\SimpleServerSetup"
 
-Start-Process "dotnet" -ArgumentList "run", "--project", $ProjectPath1, "--", $Port -NoNewWindow -PassThru -ErrorAction Stop
+if (-not (Test-Path $ProjectPath)) {
+    Write-Error "Project path does not exist: $ProjectPath"
+    exit 1
+}
+
+Start-Process "powershell.exe" -ArgumentList "dotnet run --project ""$ProjectPath"" -- $Port" -Wait
