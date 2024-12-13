@@ -34,7 +34,7 @@ namespace LoadBalancer
             }
         }
 
-        private int _activeConnections;
+        internal int _activeConnections;
         public int ActiveConnections
         {
             get => _activeConnections;
@@ -143,6 +143,7 @@ namespace LoadBalancer
         /// </summary>
         public void EnableDrainMode()
         {
+            Log.Debug( $"Drain Mode enabled for {this.ServerAddress}:{this.ServerPort}" );
             ServerHealth = 0;
             CircuitBreaker.RecordFailure();
         }

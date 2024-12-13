@@ -9,6 +9,7 @@ namespace LoadBalancer
         {
             try
             {
+                Log.SetMinimumLevel(LogLevel.Trace);
                 Log.AddSink(
                     LogSinks.ConsoleAndFile,
                     Path.Combine(
@@ -29,10 +30,10 @@ namespace LoadBalancer
 
                 List<(int DurationInSeconds, int RequestsPerSecond)> TrafficPatterns = new()
                 {
-                    (5, 100), 
-                    (9, 400),    
-                    (5, 20), 
-                    (20, 4), 
+                    (20, 4),
+                    (5, 1000), 
+                    (9, 4000),    
+                    (5, 20000),                
                 };
 
                 foreach( var pattern in TrafficPatterns )
@@ -71,7 +72,6 @@ namespace LoadBalancer
                             Log.Fatal( "Request: Failed" );
                         }
                     } ) );
-                    await Task.Delay( 1000 );
                 }
 
                 await Task.Delay( 1000 ); //pause for 1 sec to maintain the RPS

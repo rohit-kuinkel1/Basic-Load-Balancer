@@ -31,9 +31,6 @@ namespace LoadBalancer
             //initialize AutoScaler if auto-scaling is enabled
             if( enabledAutoScaling )
             {
-                var autoScalingConfigForScaler = autoScalingConfig ?? AutoScalingConfig.Factory();
-                autoScalingConfigForScaler.MinRequestThresholdForScaleDown = _servers.
-
                 _autoScaler =
                     new AutoScaler(
                         autoScalingConfig ?? AutoScalingConfig.Factory(),
@@ -81,7 +78,7 @@ namespace LoadBalancer
 
             if( !availableServers.Any() )
             {
-                _autoScaler?.ScaleUp();
+                _autoScaler?.MonitorAndScaleAsync();
                 return false;
             }
 
@@ -143,11 +140,11 @@ namespace LoadBalancer
 
             if( serverToRemove is null )
             {
-                Log.Warn( "No unhealthy server found to remove (health >= 80)." );
+                Log.Warn( "No unhealthy server found to remove." );
                 return;
             }
 
-            Log.Info( $"Initiating removal for unhealthy server: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
+            Log.Info( $"Initiating removal for unhealthy server: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}. Circuit status:{serverToRemove.CircuitBreaker.State}" );
             serverToRemove.EnableDrainMode();
 
             Task.Run( async () =>

@@ -65,6 +65,7 @@ namespace LoadBalancer
                 var recentRequests = _requestMetrics
                     .Where( kvp => kvp.Key > currentTime.AddSeconds( -30 ) )
                     .Sum( kvp => kvp.Value );
+                Log.Debug( $"Number of recent requests in the last 30 seconds were {recentRequests}" );
 
                 CleanupOldMetrics( currentTime );
                 EvaluateAndScale( recentRequests );
@@ -103,12 +104,26 @@ namespace LoadBalancer
             }
         }
 
+        /// <summary>
+        /// only scale up if we are getting more requests than the max threshold authorized for 
+        /// scale up in <see cref="AutoScalingConfig"/> and if the current server count is
+        /// less than that allowed in the <see cref="AutoScalingConfig"/>.
+        /// </summary>
+        /// <param name="recentRequests"></param>
+        /// <param name="currentServerCount"></param>
+        /// <returns></returns>
         private bool ShouldScaleUp( int recentRequests, int currentServerCount )
-            => recentRequests > _config.MaxRequestThresholdForScaleUp &&
+            => recentRequests > _config.NumberOfMaxRequestForScaleUp &&
                currentServerCount < _config.MaxServers;
 
+        /// <summary>
+        /// same logic as above but mirrored
+        /// </summary>
+        /// <param name="recentRequests"></param>
+        /// <param name="currentServerCount"></param>
+        /// <returns></returns>
         private bool ShouldScaleDown( int recentRequests, int currentServerCount )
-            => recentRequests < _config.MinRequestThresholdForScaleDown &&
+            => recentRequests < _config.NumberOfMinRequestForScaleDown &&
                currentServerCount > _config.MinServers;
 
         private void SpawnNewServer()

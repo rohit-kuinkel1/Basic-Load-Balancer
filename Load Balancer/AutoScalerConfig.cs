@@ -3,10 +3,10 @@
     public class AutoScalingConfig
     {
         public int MinServers { get; set; } = 2;
-        public int MaxServers { get; set; } = 10;
-        public int MaxRequestThresholdForScaleUp { get; set; } = 100;
-        public int MinRequestThresholdForScaleDown { get; set; } = 20;
-        public TimeSpan ScaleCheckIntervalSec { get; set; } = TimeSpan.FromSeconds( 30 );
+        public int MaxServers { get; set; } = 40;
+        public int NumberOfMaxRequestForScaleUp { get; set; } = 100;
+        public int NumberOfMinRequestForScaleDown { get; set; } = 20;
+        public TimeSpan ScaleCheckIntervalSec { get; set; } = TimeSpan.FromSeconds( 3 );
 
         public static AutoScalingConfig Factory(
             int minServers = 2,
@@ -20,8 +20,8 @@
             {
                 MinServers = minServers,
                 MaxServers = maxServers,
-                MaxRequestThresholdForScaleUp = requestThresholdForScaleUp,
-                MinRequestThresholdForScaleDown = requestThresholdForScaleDown,
+                NumberOfMaxRequestForScaleUp = requestThresholdForScaleUp,
+                NumberOfMinRequestForScaleDown = requestThresholdForScaleDown,
                 ScaleCheckIntervalSec = TimeSpan.FromSeconds( scaleCheckIntervalSec )
             };
         }
