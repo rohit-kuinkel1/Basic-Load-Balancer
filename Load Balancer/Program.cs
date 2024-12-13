@@ -17,24 +17,22 @@ namespace LoadBalancer
                     )
                 );
 
-                var autoScalingConfig = AutoScalingConfig.Factory();
-
+                //we will make sure of singelton later on with builder services
                 var loadBalancer = new LoadBalancer(
                                         loadBalancingStrategy: new RoundRobinStrategy(),
                                         httpClient: new HttpClient(),
                                         enabledAutoScaling: true,
-                                        autoScalingConfig: autoScalingConfig,
+                                        autoScalingConfig: AutoScalingConfig.Factory(),
+                                        healthCheckInterval:TimeSpan.FromSeconds(10),
                                         minHealthThreshold: 90
                 );
 
-                var dummyRequest = new HttpRequestMessage( HttpMethod.Get, "http://localhost" );
-
                 List<(int DurationInSeconds, int RequestsPerSecond)> TrafficPatterns = new()
                 {
-                    (20, 1000), // High load: 1000 req/sec for 30 seconds
-                    (9, 40),    // Low load: 40 req/sec for 9 seconds
-                    (15, 200),  // Moderate load: 200 req/sec for 15 seconds
-                    (20, 500),  // Burst: 500 req/sec for 20 seconds
+                    (5, 100), 
+                    (9, 400),    
+                    (5, 20), 
+                    (20, 4), 
                 };
 
                 foreach( var pattern in TrafficPatterns )
@@ -73,6 +71,7 @@ namespace LoadBalancer
                             Log.Fatal( "Request: Failed" );
                         }
                     } ) );
+                    await Task.Delay( 1000 );
                 }
 
                 await Task.Delay( 1000 ); //pause for 1 sec to maintain the RPS

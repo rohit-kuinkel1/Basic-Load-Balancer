@@ -6,7 +6,7 @@ namespace LoadBalancer
     {
         private readonly HttpClient _httpClient;
 
-        public HealthCheckService( HttpClient httpClient )
+        public HealthCheckService( HttpClient? httpClient )
         {
             _httpClient = httpClient ?? throw new ArgumentNullException( nameof( httpClient ) );
         }

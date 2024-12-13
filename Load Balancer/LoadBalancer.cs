@@ -15,31 +15,35 @@ namespace LoadBalancer
         private readonly int _minHealthThreshold;
 
         public LoadBalancer(
-            ILoadBalancingStrategy loadBalancingStrategy,
-            HttpClient httpClient,
+            ILoadBalancingStrategy? loadBalancingStrategy,
+            HttpClient? httpClient,
             bool enabledAutoScaling = false,
             AutoScalingConfig? autoScalingConfig = null,
             TimeSpan healthCheckInterval = default,
-            int minHealthThreshold = 70 )
+            int minHealthThreshold = 70
+        )
         {
-            _loadBalancingStrategy = loadBalancingStrategy ?? throw new ArgumentNullException( nameof( loadBalancingStrategy ) );
-            _healthCheckService = new HealthCheckService( httpClient );
-            _requestHandler = new RequestHandler( httpClient );
+            _loadBalancingStrategy = loadBalancingStrategy ?? new RoundRobinStrategy();
+            _healthCheckService = new HealthCheckService( httpClient ?? new HttpClient() );
+            _requestHandler = new RequestHandler( httpClient ?? new HttpClient() );
             _minHealthThreshold = minHealthThreshold;
 
             //initialize AutoScaler if auto-scaling is enabled
             if( enabledAutoScaling )
             {
-                _autoScaler = new AutoScaler(
-                    autoScalingConfig ?? AutoScalingConfig.Factory(),
-                    () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory() ),
-                    server => _servers.Add( server ),
-                    RemoveUnhealthyServer,
-                    () => _servers.Count,
-                    _servers);
+                var autoScalingConfigForScaler = autoScalingConfig ?? AutoScalingConfig.Factory();
+                autoScalingConfigForScaler.MinRequestThresholdForScaleDown = _servers.
+
+                _autoScaler =
+                    new AutoScaler(
+                        autoScalingConfig ?? AutoScalingConfig.Factory(),
+                        () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory() ),
+                        server => _servers.Add( server ),
+                        RemoveUnhealthyServer,
+                        () => _servers.Count
+                    );
 
                 _autoScaler.Initialize();
-
                 Log.Info( "Load Balancer started with auto-scaling enabled. Press Ctrl+C to exit." );
             }
             else

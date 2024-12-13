@@ -7,12 +7,28 @@ namespace LoadBalancer
     {
         public string ServerAddress { get; }
         public int ServerPort { get; }
-        public double ServerHealth { get; set; } = 100.0;
-        public double AverageResponseTimeMs { get; private set; } = 20;
-        public int MaxCapacity { get; }
-        public int CurrentLoad { get; private set; }
 
-        internal int _activeConnections;
+        /// <summary>
+        /// start off with 100 health for each server
+        /// </summary>
+        public double ServerHealth { get; set; } = 100.0;
+
+        /// <summary>
+        /// default average response time for a server
+        /// </summary>
+        public double AverageResponseTimeMs { get; private set; } = 20;
+
+        /// <summary>
+        /// denotes the safe max capacity for this current instance of <see cref="Server"/>
+        /// </summary>
+        public double MaxCapacityInPercentage { get; }
+
+        /// <summary>
+        /// denotes the currently in use capacity of <see cref="Server"/>
+        /// </summary>
+        public double CurrentLoadInPercentage { get; private set; }
+
+        private int _activeConnections;
         public int ActiveConnections
         {
             get => _activeConnections;
@@ -29,29 +45,29 @@ namespace LoadBalancer
 
         public CircuitBreaker CircuitBreaker { get; }
 
-        public Server( string address, int port, CircuitBreakerConfig breakerConfig, int maxCapacity = 100 )
+        public Server( string address, int port, CircuitBreakerConfig breakerConfig, double maxCapacity = 80 )
         {
             ServerAddress = address;
             ServerPort = port;
             CircuitBreaker = new CircuitBreaker( breakerConfig );
-            MaxCapacity = maxCapacity;
+            MaxCapacityInPercentage = maxCapacity;
         }
 
         public bool CanHandleRequest( int requestCount )
         {
-            return CurrentLoad + requestCount <= ( MaxCapacity * 0.9 ); //only use up to 90% of capacity
+            return CurrentLoadInPercentage + requestCount <= ( MaxCapacityInPercentage * 0.9 ); //only use up to 90% of capacity
         }
 
         public void AddLoad( int requestCount )
         {
             Interlocked.Add( ref _activeConnections, requestCount );
-            CurrentLoad += requestCount;
+            CurrentLoadInPercentage += requestCount;
         }
 
         public void RemoveLoad( int requestCount )
         {
             Interlocked.Add( ref _activeConnections, -requestCount );
-            CurrentLoad = Math.Max( 0, CurrentLoad - requestCount );
+            CurrentLoadInPercentage = Math.Max( 0, CurrentLoadInPercentage - requestCount );
         }
 
         /// <summary>

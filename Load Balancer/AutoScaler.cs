@@ -15,25 +15,19 @@ namespace LoadBalancer
         private readonly Action<IServer> _addServerCallback;
         private readonly Action _removeServerCallback;
         private readonly Func<int> _getCurrentServerCount;
-        private readonly ConcurrentDictionary<IServer, DateTime> _serverLoadHistory = new();
-        private const double MAX_SERVER_CAPACITY_THRESHOLD = 0.9; // 90% capacity threshold
-        private const int SCALE_DOWN_CHECK_MINUTES = 5; //check server load for last 5 minutes before scaling down
-        private readonly ConcurrentBag<IServer> _servers;
 
         public AutoScaler(
             AutoScalingConfig config,
             Func<Server> serverFactory,
             Action<IServer> addServerCallback,
             Action removeServerCallback,
-            Func<int> getCurrentServerCount,
-            ConcurrentBag<IServer> servers )
+            Func<int> getCurrentServerCount )
         {
             _config = config ?? throw new ArgumentNullException( nameof( config ) );
             _serverFactory = serverFactory ?? throw new ArgumentNullException( nameof( serverFactory ) );
             _addServerCallback = addServerCallback ?? throw new ArgumentNullException( nameof( addServerCallback ) );
             _removeServerCallback = removeServerCallback ?? throw new ArgumentNullException( nameof( removeServerCallback ) );
             _getCurrentServerCount = getCurrentServerCount ?? throw new ArgumentNullException( nameof( getCurrentServerCount ) );
-            _servers = servers ?? throw new ArgumentNullException( nameof( servers ) );
         }
 
         public void Initialize()
@@ -43,11 +37,6 @@ namespace LoadBalancer
                 SpawnNewServer();
             }
 
-            StartMonitoringTask();
-        }
-
-        private void StartMonitoringTask()
-        {
             Task.Run( async () =>
             {
                 while( true )
@@ -58,18 +47,6 @@ namespace LoadBalancer
             } );
         }
 
-        public void ScaleUp()
-        {
-            lock( _scalingLock )
-            {
-                var currentServerCount = _getCurrentServerCount();
-                if( currentServerCount < _config.MaxServers )
-                {
-                    SpawnNewServer();
-                    Log.Info( $"Emergency scale-up triggered. Total servers: {currentServerCount + 1}" );
-                }
-            }
-        }
 
         public void TrackRequest( DateTime timestamp )
         {
@@ -90,7 +67,7 @@ namespace LoadBalancer
                     .Sum( kvp => kvp.Value );
 
                 CleanupOldMetrics( currentTime );
-                await EvaluateAndScaleAsync( recentRequests );
+                EvaluateAndScale( recentRequests );
             }
             catch( Exception ex ) when( ex is LoadBalancerException )
             {
@@ -105,31 +82,20 @@ namespace LoadBalancer
             {
                 _requestMetrics.TryRemove( key, out _ );
             }
-
-            // Cleanup old server load history
-            var oldLoadHistory = _serverLoadHistory
-                .Where( kvp => kvp.Value < currentTime.AddMinutes( -SCALE_DOWN_CHECK_MINUTES ) )
-                .Select( kvp => kvp.Key );
-
-            foreach( var server in oldLoadHistory )
-            {
-                _serverLoadHistory.TryRemove( server, out _ );
-            }
         }
 
-        private async Task EvaluateAndScaleAsync( int recentRequests )
+        private void EvaluateAndScale( int recentRequests )
         {
             lock( _scalingLock )
             {
                 var currentServerCount = _getCurrentServerCount();
-                var serverLoads = GetServerLoads();
 
-                if( ShouldScaleUp( serverLoads ) )
+                if( ShouldScaleUp( recentRequests, currentServerCount ) )
                 {
                     SpawnNewServer();
-                    Log.Info( $"Scaling up: Added new server due to high load. Total servers: {currentServerCount + 1}" );
+                    Log.Info( $"Scaling up: Added new server. Total servers: {currentServerCount + 1}" );
                 }
-                else if( ShouldScaleDown( serverLoads, currentServerCount ) )
+                else if( ShouldScaleDown( recentRequests, currentServerCount ) )
                 {
                     _removeServerCallback();
                     Log.Info( $"Scaling down: Removed server. Total servers: {currentServerCount - 1}" );
@@ -137,41 +103,13 @@ namespace LoadBalancer
             }
         }
 
-        private Dictionary<IServer, double> GetServerLoads()
-        {
-            var serverLoads = new Dictionary<IServer, double>();
+        private bool ShouldScaleUp( int recentRequests, int currentServerCount )
+            => recentRequests > _config.MaxRequestThresholdForScaleUp &&
+               currentServerCount < _config.MaxServers;
 
-            foreach( var server in _servers )
-            {
-                // Calculate load percentage based on current load and max capacity
-                double loadPercentage = (double)server.CurrentLoad / server.MaxCapacity;
-                serverLoads[server] = loadPercentage;
-            }
-
-            return serverLoads;
-        }
-
-        private bool ShouldScaleUp( Dictionary<IServer, double> serverLoads )
-        {
-            // Scale up if any server is near capacity threshold
-            return serverLoads.Any( load => load.Value >= MAX_SERVER_CAPACITY_THRESHOLD ) &&
-                   _getCurrentServerCount() < _config.MaxServers;
-        }
-
-        private bool ShouldScaleDown( Dictionary<IServer, double> serverLoads, int currentServerCount )
-        {
-            if( currentServerCount <= _config.MinServers )
-                return false;
-
-            //check if we have consistently low load across all servers
-            var averageLoad = serverLoads.Average( x => x.Value );
-            var timeWithLowLoad = _serverLoadHistory
-                .Where( history => history.Value >= DateTime.UtcNow.AddMinutes( -SCALE_DOWN_CHECK_MINUTES ) )
-                .Count();
-
-            return averageLoad < 0.3 && // 30% capacity
-                   timeWithLowLoad >= SCALE_DOWN_CHECK_MINUTES;
-        }
+        private bool ShouldScaleDown( int recentRequests, int currentServerCount )
+            => recentRequests < _config.MinRequestThresholdForScaleDown &&
+               currentServerCount > _config.MinServers;
 
         private void SpawnNewServer()
         {
@@ -191,14 +129,16 @@ namespace LoadBalancer
                 };
                 process.Start();
 
-                Log.Info( $"Spawning up a new server instance localhost:{port}" );
+                Log.Info( $"Spawing up a new server instance localhost:{port}" );
                 var server = new Server( "localhost", port, CircuitBreakerConfig.Factory() );
                 _addServerCallback( server );
             }
             catch( Exception ex ) when( ex is TimeoutException or LoadBalancerException )
             {
-                Log.Error( $"Failed to spawn a new server on port {port}: {ex.Message}" );
-                PortUtils.ReleasePort( port );
+                {
+                    Log.Error( $"Failed to spawn a new server on port {port}: {ex.Message}" );
+                    PortUtils.ReleasePort( port );
+                }
             }
         }
     }
