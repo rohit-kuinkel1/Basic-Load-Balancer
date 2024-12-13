@@ -9,24 +9,30 @@ namespace LoadBalancer
         public int ServerPort { get; }
 
         /// <summary>
-        /// start off with 100 health for each server
+        /// Start off with 100 health for each server
         /// </summary>
         public double ServerHealth { get; set; } = 100.0;
 
         /// <summary>
-        /// default average response time for a server
+        /// Default average response time for a server
         /// </summary>
         public double AverageResponseTimeMs { get; private set; } = 20;
 
         /// <summary>
-        /// denotes the safe max capacity for this current instance of <see cref="Server"/>
+        /// Denotes the safe max capacity for this current instance of <see cref="Server"/>
         /// </summary>
         public double MaxCapacityInPercentage { get; }
 
         /// <summary>
-        /// denotes the currently in use capacity of <see cref="Server"/>
+        /// Denotes the currently in use capacity of <see cref="Server"/>
         /// </summary>
-        public double CurrentLoadInPercentage { get; private set; }
+        public double CurrentLoadInPercentage
+        {
+            get
+            {
+                return (double)_activeConnections / MaxConcurrentConnections * 100;
+            }
+        }
 
         private int _activeConnections;
         public int ActiveConnections
@@ -35,8 +41,17 @@ namespace LoadBalancer
             private set => _activeConnections = value;
         }
 
-        public bool IsServerHealthy => CircuitBreaker.State == CircuitState.Closed ||
-                                     CircuitBreaker.State == CircuitState.HalfOpen;
+        /// <summary>
+        /// The maximum number of concurrent connections allowed for this server
+        /// </summary>
+        public int MaxConcurrentConnections { get; }
+
+        /// <summary>
+        /// Server is marked as healthy as long as the <see cref="CircuitState"/> for the <see cref="CircuitBreaker"/> for this instance is 
+        /// either <see cref="CircuitState.Closed"/> or <see cref="CircuitState.HalfOpen"/>.
+        /// If the <see cref="CircuitState"/> is <see cref="CircuitState.Open"/> then the server is deemed to be unhealthy
+        /// </summary>
+        public bool IsServerHealthy => CircuitBreaker.State == CircuitState.Closed || CircuitBreaker.State == CircuitState.HalfOpen;
 
         private int _requestCount;
         private int _failedRequests;
@@ -45,29 +60,28 @@ namespace LoadBalancer
 
         public CircuitBreaker CircuitBreaker { get; }
 
-        public Server( string address, int port, CircuitBreakerConfig breakerConfig, double maxCapacity = 80 )
+        public Server( string address, int port, CircuitBreakerConfig breakerConfig, double maxCapacityInPercentage = 80, int totalConnections = 1000 )
         {
             ServerAddress = address;
             ServerPort = port;
             CircuitBreaker = new CircuitBreaker( breakerConfig );
-            MaxCapacityInPercentage = maxCapacity;
+            MaxCapacityInPercentage = maxCapacityInPercentage;
+            MaxConcurrentConnections = (int)( totalConnections * ( maxCapacityInPercentage / 100 ) );
         }
 
         public bool CanHandleRequest( int requestCount )
         {
-            return CurrentLoadInPercentage + requestCount <= ( MaxCapacityInPercentage * 0.9 ); //only use up to 90% of capacity
+            return ActiveConnections + requestCount <= MaxConcurrentConnections;
         }
 
         public void AddLoad( int requestCount )
         {
             Interlocked.Add( ref _activeConnections, requestCount );
-            CurrentLoadInPercentage += requestCount;
         }
 
         public void RemoveLoad( int requestCount )
         {
             Interlocked.Add( ref _activeConnections, -requestCount );
-            CurrentLoadInPercentage = Math.Max( 0, CurrentLoadInPercentage - requestCount );
         }
 
         /// <summary>
@@ -104,7 +118,6 @@ namespace LoadBalancer
                 ServerHealth = Math.Min( 100.0, ServerHealth + 10 );
                 _consecutiveFailures = 0;
 
-                // Ensure Circuit Breaker is marked as healthy
                 CircuitBreaker.RecordSuccess();
             }
             else
@@ -114,7 +127,6 @@ namespace LoadBalancer
 
                 if( _consecutiveFailures >= 3 )
                 {
-                    //prevent further requests from being sent
                     CircuitBreaker.State = CircuitState.Open;
 
                     if( _consecutiveFailures >= 5 )
@@ -124,7 +136,6 @@ namespace LoadBalancer
                 }
             }
         }
-
 
         /// <summary>
         /// Enables drain mode to gracefully shut down the server.
