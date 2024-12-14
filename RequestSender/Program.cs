@@ -1,5 +1,7 @@
 ﻿using LoadBalancer.Exceptions;
 using LoadBalancer.Logger;
+using Microsoft.Extensions.DependencyInjection;
+using System;
 
 namespace LoadBalancer
 {
@@ -18,16 +20,8 @@ namespace LoadBalancer
                     )
                 );
 
-                //we will make sure of singelton later on with builder services
-                var loadBalancer = new LoadBalancer(
-                                        loadBalancingStrategy: new RoundRobinStrategy(),
-                                        httpClient: new HttpClient(),
-                                        enabledAutoScaling: true,
-                                        autoScalingConfig: AutoScalingConfig.Factory(),
-                                        healthCheckInterval: TimeSpan.FromSeconds(10),
-                                        minHealthThreshold: 90
-                );
-
+                var serviceProvider = Program.BuildServiceProvider();
+                var loadBalancer = serviceProvider.GetRequiredService<LoadBalancer>();
 
                 List<(int DurationInSeconds, int RequestsPerSecond)> TrafficPatterns = new()
                 {
@@ -47,6 +41,25 @@ namespace LoadBalancer
                 Log.Error("An error occurred", ex);
                 Environment.Exit(1);
             }
+        }
+
+        private static ServiceProvider BuildServiceProvider()
+        {
+            var services = new ServiceCollection();
+
+            services.AddSingleton<LoadBalancer>(provider =>
+            {
+                return new LoadBalancer(
+                    loadBalancingStrategy: new RoundRobinStrategy(),
+                    httpClient: new HttpClient(),
+                    enabledAutoScaling: true,
+                    autoScalingConfig: AutoScalingConfig.Factory(),
+                    healthCheckInterval: TimeSpan.FromSeconds(10),
+                    minHealthThreshold: 90
+                );
+            });
+
+            return services.BuildServiceProvider();
         }
 
         private static async Task SimulateTraffic(LoadBalancer loadBalancer, int requestsPerSecond, int durationInSeconds)
