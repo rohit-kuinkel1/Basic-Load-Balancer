@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleServerSetup", "..\Sim
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharedAbstractions", "..\SharedAbstractions\SharedAbstractions.csproj", "{ABBF1641-115C-44EE-AA05-8F1B38CB158C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RequestSender", "..\RequestSender\RequestSender.csproj", "{17090D7A-BDC5-4369-8551-ECACDCA3F206}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{ABBF1641-115C-44EE-AA05-8F1B38CB158C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABBF1641-115C-44EE-AA05-8F1B38CB158C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ABBF1641-115C-44EE-AA05-8F1B38CB158C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{17090D7A-BDC5-4369-8551-ECACDCA3F206}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17090D7A-BDC5-4369-8551-ECACDCA3F206}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17090D7A-BDC5-4369-8551-ECACDCA3F206}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17090D7A-BDC5-4369-8551-ECACDCA3F206}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
