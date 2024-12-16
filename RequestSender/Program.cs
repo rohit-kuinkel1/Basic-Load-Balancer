@@ -25,7 +25,7 @@ namespace LoadBalancer
 
                 List<(int DurationInSeconds, int RequestsPerSecond)> TrafficPatterns = new()
                 {
-                    (5, 1),
+                    (10, 1),
                     (5, 1000),
                     (9, 40000),
                     (5, 20000),

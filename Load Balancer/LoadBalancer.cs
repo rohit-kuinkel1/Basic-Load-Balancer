@@ -6,7 +6,7 @@ namespace LoadBalancer
 {
     public class LoadBalancer : ILoadBalancer
     {
-        private readonly ConcurrentBag<IServer> _servers = new();
+        private readonly ConcurrentDictionary<IServer, bool> _servers = new();
         private readonly ILoadBalancingStrategy _loadBalancingStrategy;
         private readonly HealthCheckService _healthCheckService;
         private readonly RequestHandler _requestHandler;
@@ -28,29 +28,29 @@ namespace LoadBalancer
             _requestHandler = new RequestHandler( httpClient ?? new HttpClient() );
             _minHealthThreshold = minHealthThreshold;
 
-            //initialize AutoScaler if auto-scaling is enabled
+            //initialize AutoScaler if auto scaling was enabled
             if( enabledAutoScaling )
             {
-                _autoScaler =
-                    new AutoScaler(
-                        autoScalingConfig ?? AutoScalingConfig.Factory(),
-                        () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory(), maxCapacityInPercentage: 50, totalConnections: 100 ),
-                        server => _servers.Add( server ),
-                        RemoveUnhealthyServer,
-                        () => _servers.Count
-                    );
+                _autoScaler = new AutoScaler(
+                    autoScalingConfig ?? AutoScalingConfig.Factory(),
+                    () => new Server(
+                        "localhost",
+                        PortUtils.FindAvailablePort(),
+                        CircuitBreakerConfig.Factory(),
+                        maxCapacityInPercentage: 50,
+                        totalConnections: 100 ),
+                    server => _servers.TryAdd( server, true ),
+                    RemoveUnhealthyServer,
+                    () => _servers.Count );
 
                 _autoScaler.Initialize();
                 Log.Info( "Load Balancer started with auto-scaling enabled. Press Ctrl+C to exit." );
             }
             else
             {
-                Log.Warn( "Load Balancer started without auto-scaling enabled.Press Ctrl+C to exit." );
+                Log.Warn( "Load Balancer started without auto-scaling enabled. Press Ctrl+C to exit." );
             }
 
-
-            //for now we use a "dummy" health check, meaning do the health check in X time interval
-            //this will be replaced later on with a smarter algorithm that will know when to do the checks
             _healthCheckTimer = new System.Timers.Timer
             {
                 Interval = healthCheckInterval == default ? TimeSpan.FromSeconds( 10 ).TotalMilliseconds : healthCheckInterval.TotalMilliseconds,
@@ -72,7 +72,7 @@ namespace LoadBalancer
 
         public async Task<bool> SendRequestAsync()
         {
-            var availableServers = _servers
+            var availableServers = _servers.Keys
                 .Where( server => server.CanHandleRequest( 1 ) )
                 .ToList();
 
@@ -85,18 +85,13 @@ namespace LoadBalancer
             return await _requestHandler.SendRequestAsync( server );
         }
 
-
-
-        /// <summary>
-        /// dummy health decreaser for now
-        /// </summary>
         private void StartHealthDecrementTask( double timeInMinutes = 10 )
         {
             Task.Run( async () =>
             {
                 while( true )
                 {
-                    foreach( var server in _servers )
+                    foreach( var server in _servers.Keys )
                     {
                         lock( server )
                         {
@@ -108,10 +103,9 @@ namespace LoadBalancer
             } );
         }
 
-
         public async Task PerformHealthChecksAsync()
         {
-            var tasks = _servers.Select( async server =>
+            var tasks = _servers.Keys.Select( async server =>
             {
                 await _healthCheckService.PerformHealthCheckAsync( server );
 
@@ -126,7 +120,7 @@ namespace LoadBalancer
 
         private void RemoveUnhealthyServer()
         {
-            var serverToRemove = _servers
+            var serverToRemove = _servers.Keys
                 .OfType<Server>()
                 .Where( server => server.ServerHealth < 80 )
                 .OrderBy( server => server.ServerHealth )
@@ -138,29 +132,29 @@ namespace LoadBalancer
                 return;
             }
 
-            Log.Info( $"Initiating removal for unhealthy server: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}. Circuit status:{serverToRemove.CircuitBreaker.State}" );
+            Log.Info( $"Initiating removal for unhealthy server: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}. Circuit status: {serverToRemove.CircuitBreaker.State}" );
             serverToRemove.EnableDrainMode();
 
             Task.Run( async () =>
             {
+                Log.Debug( $"Waiting for connections to the unhealthy server to die off before backlogging it. Current active connections: {serverToRemove.ActiveConnections}" );
                 while( serverToRemove.ActiveConnections > 0 )
                 {
-                    await Task.Delay( 50 );
+                    await Task.Delay( 10 );
                 }
 
-                var filteredServers = _servers.Where( srv => srv != serverToRemove ).ToList();
-                var newBag = new ConcurrentBag<IServer>( filteredServers );
+                var filteredServers = _servers.Keys.Where( srv => srv != serverToRemove ).ToList();
+                _servers.Clear();
 
-                foreach( var srv in newBag )
+                foreach( var srv in filteredServers )
                 {
-                    _servers.Add( srv );
+                    _servers.TryAdd( srv, true );
                 }
 
                 PortUtils.ReleasePort( serverToRemove.ServerPort );
                 Log.Warn( $"Server removed from pool with port release: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
             } );
         }
-
 
         public void StopHealthChecks()
         {

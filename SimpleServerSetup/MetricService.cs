@@ -23,8 +23,8 @@ namespace SimpleServer
 
         public int SimulateLatency()
         {
-            //simulate varying response times between 50-200ms
-            return _random.Next( 50, 200 );
+            //simulate varying response times between 1-5 ms
+            return _random.Next( 1, 5 );
         }
 
         public double GetAverageResponseTime()
@@ -33,7 +33,7 @@ namespace SimpleServer
             {
                 return _responseTimes.Any()
                     ? _responseTimes.Average()
-                    : 100; //default average if no requests yet
+                    : 1; //default average if no requests yet
             }
         }
     }
