@@ -162,7 +162,6 @@ namespace LoadBalancer
         }
 
 
-
         public void StopHealthChecks()
         {
             _healthCheckTimer.Stop();
