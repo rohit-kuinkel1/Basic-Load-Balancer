@@ -57,11 +57,12 @@ namespace LoadBalancer
                 AutoReset = true
             };
 
+            Log.Debug( $"Will perform health checks for the servers every {TimeSpan.FromSeconds( _healthCheckTimer.Interval / 1000 )} seconds" );
             _healthCheckTimer.Elapsed += async ( _, _ ) => await PerformHealthChecksAsync();
             _healthCheckTimer.Start();
 
             //simulate health decrease
-            StartHealthDecrementTask( 0.01 );
+            StartHealthDecrementTask( timeInSec: 1, decreaseAmount: 10 );
         }
 
         public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
@@ -85,7 +86,7 @@ namespace LoadBalancer
             return await _requestHandler.SendRequestAsync( server );
         }
 
-        private void StartHealthDecrementTask( double timeInMinutes = 10 )
+        private void StartHealthDecrementTask( double timeInSec = 10, double decreaseAmount = 5 )
         {
             Task.Run( async () =>
             {
@@ -95,16 +96,18 @@ namespace LoadBalancer
                     {
                         lock( server )
                         {
-                            server.ServerHealth = Math.Max( 0, server.ServerHealth - 5 );
+                            server.ServerHealth = Math.Max( 0, server.ServerHealth - decreaseAmount );
                         }
                     }
-                    await Task.Delay( TimeSpan.FromMinutes( timeInMinutes ) );
+                    //wait timeInSec seconds before decaying the health for all the servers again
+                    await Task.Delay( TimeSpan.FromSeconds( timeInSec ) );
                 }
             } );
         }
 
         public async Task PerformHealthChecksAsync()
         {
+            Log.Debug( $"Performing health checks for all the servers" );
             var tasks = _servers.Keys.Select( async server =>
             {
                 await _healthCheckService.PerformHealthCheckAsync( server );
@@ -112,6 +115,10 @@ namespace LoadBalancer
                 if( !server.IsServerHealthy && server is Server s && s.CircuitBreaker.State == CircuitState.Open )
                 {
                     RemoveUnhealthyServer();
+                }
+                else
+                {
+                    Log.Debug( $"Server {server.ServerAddress}:{server.ServerPort} is currently healthy with health {server.ServerHealth}" );
                 }
             } );
 
@@ -137,7 +144,8 @@ namespace LoadBalancer
 
             Task.Run( async () =>
             {
-                Log.Debug( $"Waiting for connections to the unhealthy server to die off before backlogging it. Current active connections: {serverToRemove.ActiveConnections}" );
+                Log.Debug( $"Waiting for connections to the unhealthy server {serverToRemove.ServerAddress}:{serverToRemove.ServerPort} to die off before backlogging it." +
+                    $" Current active connections to it: {serverToRemove.ActiveConnections}" );
                 while( serverToRemove.ActiveConnections > 0 )
                 {
                     await Task.Delay( 10 );
