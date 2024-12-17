@@ -13,14 +13,14 @@ namespace LoadBalancer
         private readonly object _scalingLock = new object();
         private readonly Func<Server> _serverFactory;
         private readonly Action<IServer> _addServerCallback;
-        private readonly Action _removeServerCallback;
+        private readonly Action<bool> _removeServerCallback;
         private readonly Func<int> _getCurrentServerCount;
 
         public AutoScaler(
             AutoScalingConfig config,
             Func<Server> serverFactory,
             Action<IServer> addServerCallback,
-            Action removeServerCallback,
+            Action<bool> removeServerCallback,
             Func<int> getCurrentServerCount )
         {
             _config = config ?? throw new ArgumentNullException( nameof( config ) );
@@ -97,8 +97,8 @@ namespace LoadBalancer
                 }
                 else if( ShouldScaleDown( recentRequests, currentServerCount ) )
                 {
-                    _removeServerCallback();
-                    Log.Info( $"Scaling down: Removed server. Total servers: {currentServerCount - 1}" );
+                    _removeServerCallback(true);
+                    Log.Info( $"Scaling down: Removed a server. Total servers: {currentServerCount - 1}" );
                 }
             }
         }
@@ -127,7 +127,14 @@ namespace LoadBalancer
 
         private void SpawnNewServer()
         {
+            if( _getCurrentServerCount() >= _config.MaxServers )
+            {
+                Log.Fatal( $"Cannot instantiate more servers since auto scale config allows max {_config.MaxServers} and {_getCurrentServerCount()} servers are already up" );
+                return;
+            }
+
             var port = PortUtils.FindAvailablePort();
+            //hard coded for now , remove it later
             var scriptPath = @"D:\git\Basic-Load-Balancer\SimpleServerSetup\start_servers.ps1";
             try
             {
@@ -145,6 +152,7 @@ namespace LoadBalancer
 
                 Log.Info( $"Spawing up a new server instance localhost:{port}" );
                 var server = new Server( "localhost", port, CircuitBreakerConfig.Factory() );
+                //register this new server with the load balancer
                 _addServerCallback( server );
             }
             catch( Exception ex ) when( ex is TimeoutException or LoadBalancerException )
@@ -153,7 +161,7 @@ namespace LoadBalancer
                     Log.Error( $"Failed to spawn a new server on port {port}: {ex.Message}" );
                     PortUtils.ReleasePort( port );
                 }
-            }
+            }          
         }
     }
 }

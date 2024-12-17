@@ -50,11 +50,11 @@ namespace LoadBalancer
                 AutoReset = true
             };
 
-            Log.Warn( $"Will perform health checks for the servers every {_healthCheckTimer.Interval / 1000} seconds" );
+            Log.Debug( $"Will perform health checks for the servers every {_healthCheckTimer.Interval / 1000} seconds" );
             _healthCheckTimer.Elapsed += async ( _, _ ) => await PerformHealthChecksAsync();
             _healthCheckTimer.Start();
 
-            StartHealthDecrementTask( timeInSec: 1, decreaseAmount: 10 );
+            StartHealthDecrementTask( timeInSec: 10, decreaseAmount: 3 );
         }
 
     public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
@@ -116,49 +116,60 @@ namespace LoadBalancer
         await Task.WhenAll( tasks );
     }
 
-    private void RemoveUnhealthyServer()
-    {
-        var serverToRemove = _servers.Keys
-            .OfType<Server>()
-            .Where( server => server.ServerHealth < 80 )
-            .OrderBy( server => server.ServerHealth )
-            .FirstOrDefault();
-
-        if( serverToRemove is null )
+        private void RemoveUnhealthyServer( bool forceRemoval = false )
         {
-            Log.Warn( "No unhealthy server found to remove." );
+            IServer? strm = null;
+
+            if( forceRemoval )
+            {
+                strm = _servers.Keys
+                    .OfType<IServer>()
+                    .OrderBy( server => server.ServerHealth )  
+                    .FirstOrDefault();
+            }
+            else
+            {
+                strm = _servers.Keys
+                    .OfType<IServer>()
+                    .Where( server => server.ServerHealth < 80 ) 
+                    .OrderBy( server => server.ServerHealth ) 
+                    .FirstOrDefault();
+            }
+
+            if( strm is Server serverToRemove)
+            {
+
+                Log.Info( $"Initiating removal for unhealthy server: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}. Circuit status: {serverToRemove.CircuitBreaker.State}" );
+                serverToRemove.EnableDrainMode();
+
+                Task.Run( async () =>
+                {
+                    Log.Debug( $"Waiting for connections to the unhealthy server {serverToRemove.ServerAddress}:{serverToRemove.ServerPort} to die off before backlogging it." +
+                              $" Current active connections to it: {serverToRemove.ActiveConnections}" );
+                    while( serverToRemove.ActiveConnections > 0 )
+                    {
+                        await Task.Delay( 10 );
+                    }
+
+                    var filteredServers = _servers.Keys.Where( srv => srv != serverToRemove ).ToList();
+                    _servers.Clear();
+
+                    foreach( var srv in filteredServers )
+                    {
+                        _servers.TryAdd( srv, true );
+                    }
+
+                    PortUtils.ReleasePort( serverToRemove.ServerPort );
+                    Log.Warn( $"Server removed from pool with port release: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
+                } );
+            }
             return;
         }
 
-        Log.Info( $"Initiating removal for unhealthy server: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}. Circuit status: {serverToRemove.CircuitBreaker.State}" );
-        serverToRemove.EnableDrainMode();
-
-        Task.Run( async () =>
-        {
-            Log.Debug( $"Waiting for connections to the unhealthy server {serverToRemove.ServerAddress}:{serverToRemove.ServerPort} to die off before backlogging it." +
-                $" Current active connections to it: {serverToRemove.ActiveConnections}" );
-            while( serverToRemove.ActiveConnections > 0 )
-            {
-                await Task.Delay( 10 );
-            }
-
-            var filteredServers = _servers.Keys.Where( srv => srv != serverToRemove ).ToList();
-            _servers.Clear();
-
-            foreach( var srv in filteredServers )
-            {
-                _servers.TryAdd( srv, true );
-            }
-
-            PortUtils.ReleasePort( serverToRemove.ServerPort );
-            Log.Warn( $"Server removed from pool with port release: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
-        } );
-    }
-
-    public void StopHealthChecks()
+        public void StopHealthChecks()
     {
-        _healthCheckTimer.Stop();
-        _healthCheckTimer.Dispose();
+        _healthCheckTimer?.Stop();
+        _healthCheckTimer?.Dispose();
     }
 }
 }

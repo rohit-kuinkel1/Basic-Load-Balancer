@@ -71,7 +71,7 @@ namespace LoadBalancer
 
         public bool CanHandleRequest( int requestCount )
         {
-            return ActiveConnections + requestCount <= MaxConcurrentConnections;
+            return CircuitBreaker.AllowRequest() && ActiveConnections + requestCount <= MaxConcurrentConnections;
         }
 
         public void AddLoad( int requestCount )
@@ -115,7 +115,7 @@ namespace LoadBalancer
         {
             if( isHealthy )
             {
-                ServerHealth = Math.Min( 100.0, ServerHealth + 10 );
+                //ServerHealth = Math.Min( 100.0, ServerHealth + 10 );
                 _consecutiveFailures = 0;
 
                 CircuitBreaker.RecordSuccess();

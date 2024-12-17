@@ -1,4 +1,5 @@
-﻿namespace LoadBalancer
+﻿using LoadBalancer.Logger;
+namespace LoadBalancer
 {
     public class CircuitBreaker
     {

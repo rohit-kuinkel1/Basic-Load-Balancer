@@ -3,7 +3,7 @@
     public class AutoScalingConfig
     {
         public int MinServers { get; set; } = 2;
-        public int MaxServers { get; set; } = 40;
+        public int MaxServers { get; set; } = 10;
         public int NumberOfMaxRequestForScaleUp { get; set; } = 100;
         public int NumberOfMinRequestForScaleDown { get; set; } = 20;
         public TimeSpan ScaleCheckIntervalMs { get; set; } = TimeSpan.FromMilliseconds( 50 );
