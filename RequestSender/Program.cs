@@ -1,7 +1,6 @@
 ﻿using LoadBalancer.Exceptions;
 using LoadBalancer.Logger;
 using Microsoft.Extensions.DependencyInjection;
-using System;
 
 namespace LoadBalancer
 {
@@ -11,7 +10,7 @@ namespace LoadBalancer
         {
             try
             {
-                Log.SetMinimumLevel(LogLevel.Trace);
+
                 Log.AddSink(
                     LogSinks.ConsoleAndFile,
                     Path.Combine(
@@ -19,22 +18,25 @@ namespace LoadBalancer
                         "LoadBalancerLogs"
                     )
                 );
+                Log.SetMinimumLevel(LogLevel.Trace);
 
-                var serviceProvider = Program.BuildServiceProvider();
+                var services = new ServiceCollection();
+                services.AddSingleton<LoadBalancer>(provider =>
+                {
+                    return new LoadBalancer(
+                        loadBalancingStrategy: new RoundRobinStrategy(),
+                        httpClient: new HttpClient(),
+                        enabledAutoScaling: true,
+                        autoScalingConfig: AutoScalingConfig.Factory(),
+                        healthCheckInterval: TimeSpan.FromSeconds(10),
+                        minHealthThreshold: 90
+                    );
+                });
+
+                var serviceProvider = services.BuildServiceProvider();
                 var loadBalancer = serviceProvider.GetRequiredService<LoadBalancer>();
 
-                List<(int DurationInSeconds, int RequestsPerSecond)> TrafficPatterns = new()
-                {
-                    (10, 1),
-                    (5, 1000),
-                    (9, 40000),
-                    (5, 20000),
-                };
-
-                foreach (var pattern in TrafficPatterns)
-                {
-                    await SimulateTraffic(loadBalancer, pattern.RequestsPerSecond, pattern.DurationInSeconds);
-                }
+                await SimulateTraffic(loadBalancer);
             }
             catch (Exception ex) when (ex is LoadBalancerException)
             {
@@ -43,56 +45,51 @@ namespace LoadBalancer
             }
         }
 
-        private static ServiceProvider BuildServiceProvider()
+        private static async Task SimulateTraffic(LoadBalancer loadBalancer)
         {
-            var services = new ServiceCollection();
-
-            services.AddSingleton<LoadBalancer>(provider =>
+            List<(int DurationInSeconds, int RequestsPerSecond)> trafficPatterns = new()
             {
-                return new LoadBalancer(
-                    loadBalancingStrategy: new RoundRobinStrategy(),
-                    httpClient: new HttpClient(),
-                    enabledAutoScaling: true,
-                    autoScalingConfig: AutoScalingConfig.Factory(),
-                    healthCheckInterval: TimeSpan.FromSeconds(10),
-                    minHealthThreshold: 90
-                );
-            });
+                //for 10 sec, send 1 req
+                (10, 1),
+                //for 60 sec, send 10 req
+                (60, 10),
+                (5, 1000),
+                (9, 40000),
+                (5, 20000),
+            };
 
-            return services.BuildServiceProvider();
-        }
-
-        private static async Task SimulateTraffic(LoadBalancer loadBalancer, int requestsPerSecond, int durationInSeconds)
-        {
-            Log.Info($"Simulating traffic: {requestsPerSecond} requests/second for {durationInSeconds} seconds.");
-
-            var tasks = new List<Task>();
-            var endTime = DateTime.UtcNow.AddSeconds(durationInSeconds);
-
-            while (DateTime.UtcNow < endTime)
+            foreach (var pattern in trafficPatterns)
             {
-                for (int i = 0; i < requestsPerSecond; i++)
+                Log.Info($"Simulating traffic: {pattern.RequestsPerSecond} requests/second for {pattern.DurationInSeconds} seconds.");
+
+                var tasks = new List<Task>();
+                var endTime = DateTime.UtcNow.AddSeconds(pattern.DurationInSeconds);
+
+                while (DateTime.UtcNow < endTime)
                 {
-                    tasks.Add(Task.Run(async () =>
+                    for (int i = 0; i < pattern.RequestsPerSecond; i++)
                     {
-                        var dummyRequest = new HttpRequestMessage(HttpMethod.Get, "http://localhost");
-                        var wasRequestHandled = await loadBalancer.HandleRequestAsync(dummyRequest);
-                        if (wasRequestHandled)
+                        tasks.Add(Task.Run(async () =>
                         {
-                            Log.Info("Request: OK");
-                        }
-                        else
-                        {
-                            Log.Fatal("Request: Failed");
-                        }
-                    }));
+                            var dummyRequest = new HttpRequestMessage(HttpMethod.Get, "http://localhost");
+                            var wasRequestHandled = await loadBalancer.HandleRequestAsync(dummyRequest);
+                            if (wasRequestHandled)
+                            {
+                                Log.Info("Request: OK");
+                            }
+                            else
+                            {
+                                Log.Fatal("Request: Failed");
+                            }
+                        }));
+                    }
+
+                    await Task.Delay(5000);
                 }
 
-                await Task.Delay(2000);
+                await Task.WhenAll(tasks);
+                Log.Info($"Finished traffic simulation: {pattern.RequestsPerSecond} requests/second.");
             }
-
-            await Task.WhenAll(tasks);
-            Log.Info($"Finished traffic simulation: {requestsPerSecond} requests/second.");
         }
     }
 }

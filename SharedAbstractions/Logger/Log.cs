@@ -16,8 +16,12 @@ namespace LoadBalancer.Logger
         }
 
         public static void SetMinimumLevel(LogLevel level)
-        {
+        {          
             _minimumLevel = level;
+            if (_sinks.Count > 0)
+            {
+                Log.Warn($"Min log level set to {_minimumLevel}");
+            }
         }
 
         public static void AddSink(LogSinks sink, string? targetDirectory = null)
