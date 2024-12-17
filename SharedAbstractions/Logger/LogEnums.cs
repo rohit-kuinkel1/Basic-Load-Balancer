@@ -2,12 +2,12 @@
 {
     public enum LogLevel
     {
-        Trace = 0,
-        Debug = 1,
-        Info = 2,
-        Warn = 3,
-        Error = 4,
-        Fatal = 5
+        TRC = 0,
+        DBG = 1,
+        INF = 2,
+        WRN = 3,
+        ERR = 4,
+        FTL = 5
     }
 
     public enum LogSinks

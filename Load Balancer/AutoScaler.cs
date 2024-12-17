@@ -65,7 +65,6 @@ namespace LoadBalancer
                 var recentRequests = _requestMetrics
                     .Where( kvp => kvp.Key > currentTime.AddSeconds( -5 ) )
                     .Sum( kvp => kvp.Value );
-                Log.Debug( $"Number of recent requests in the last 30 seconds were {recentRequests}" );
 
                 CleanupOldMetrics( currentTime );
                 EvaluateAndScale( recentRequests );

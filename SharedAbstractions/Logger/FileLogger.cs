@@ -11,7 +11,7 @@ namespace LoadBalancer.Logger
         private StreamWriter? _writer;
         private DateTime _currentFileDate;
 
-        public FileLogger(string targetDirectory, LogLevel minLevel = LogLevel.Info)
+        public FileLogger(string targetDirectory, LogLevel minLevel = LogLevel.INF)
         {
             try
             {

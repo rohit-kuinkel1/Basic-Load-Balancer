@@ -1,4 +1,6 @@
-﻿namespace LoadBalancer.Logger
+﻿using System.Diagnostics;
+
+namespace LoadBalancer.Logger
 {
     /// <summary>
     /// <see cref="ConsoleLogger"/> redirects the output to the <see cref="LogSinks.Console"/> for the tool.
@@ -8,7 +10,7 @@
         private readonly object _lock = new object();
         private readonly LogLevel _minLevel;
 
-        public ConsoleLogger(LogLevel minLevel = LogLevel.Info)
+        public ConsoleLogger(LogLevel minLevel = LogLevel.INF)
         {
             _minLevel = minLevel;
         }
@@ -30,8 +32,11 @@
                 var prevColorPair = GetCurrentConsoleColors();
                 var newColorPair = GetConsoleColors(level);
 
+                var pid = Process.GetCurrentProcess().Id;
+                var tid = Environment.CurrentManagedThreadId;
+
                 SetConsoleColors(newColorPair);
-                Console.WriteLine($"[{DateTime.UtcNow:dd.MM.yyyy HH:mm:ss.fffffff}] [{level}] {message} ");
+                Console.WriteLine($"[{DateTime.UtcNow:dd.MM.yyyy HH:mm:ss.fffffff}] [PID:{pid,6}]|[TID:{tid,3}] [{level,5}]  {message} ");
                 SetConsoleColors(prevColorPair);
 
                 if (exception != null)
@@ -56,19 +61,19 @@
         {
             return level switch
             {
-                LogLevel.Trace => Tuple.Create(ConsoleColor.Gray, ConsoleColor.Black),
-                LogLevel.Debug => Tuple.Create(ConsoleColor.DarkGray, ConsoleColor.Black),
-                LogLevel.Info => Tuple.Create(ConsoleColor.Green, ConsoleColor.Black),
-                LogLevel.Warn => Tuple.Create(ConsoleColor.Yellow, ConsoleColor.Black),
-                LogLevel.Error => Tuple.Create(ConsoleColor.Red, ConsoleColor.Black),
-                LogLevel.Fatal => Tuple.Create(ConsoleColor.White, ConsoleColor.DarkRed),
+                LogLevel.TRC => Tuple.Create(ConsoleColor.Gray, ConsoleColor.Black),
+                LogLevel.DBG => Tuple.Create(ConsoleColor.Magenta, ConsoleColor.Black),
+                LogLevel.INF => Tuple.Create(ConsoleColor.Green, ConsoleColor.Black),
+                LogLevel.WRN => Tuple.Create(ConsoleColor.Yellow, ConsoleColor.Black),
+                LogLevel.ERR => Tuple.Create(ConsoleColor.Red, ConsoleColor.Black),
+                LogLevel.FTL => Tuple.Create(ConsoleColor.White, ConsoleColor.DarkRed),
                 _ => Tuple.Create(ConsoleColor.White, ConsoleColor.Black)
             };
         }
 
         private void SetConsoleColors(Tuple<ConsoleColor, ConsoleColor> colorPairs)
         {
-            Console.ForegroundColor= colorPairs.Item1;
+            Console.ForegroundColor = colorPairs.Item1;
             Console.BackgroundColor = colorPairs.Item2;
         }
 

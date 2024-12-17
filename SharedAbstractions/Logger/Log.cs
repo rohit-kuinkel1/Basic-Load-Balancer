@@ -7,7 +7,7 @@ namespace LoadBalancer.Logger
     {
         private static readonly ConcurrentDictionary<LogSinks, ILogger> _sinks = new();
         private static readonly object _lock = new();
-        private static LogLevel _minimumLevel = LogLevel.Info;
+        private static LogLevel _minimumLevel = LogLevel.INF;
 
         static Log()
         {
@@ -20,7 +20,7 @@ namespace LoadBalancer.Logger
             _minimumLevel = level;
             if (_sinks.Count > 0)
             {
-                Log.Warn($"Min log level set to {_minimumLevel}");
+                Log.Trace($"Min log level set to {_minimumLevel}");
             }
         }
 
@@ -84,12 +84,12 @@ namespace LoadBalancer.Logger
             }
         }
 
-        public static void Trace(string message) => Write(LogLevel.Trace, message);
-        public static void Debug(string message) => Write(LogLevel.Debug, message);
-        public static void Info(string message) => Write(LogLevel.Info, message);
-        public static void Warn(string message, Exception? ex = null) => Write(LogLevel.Warn, message, ex);
-        public static void Error(string message, Exception? ex = null) => Write(LogLevel.Error, message, ex);
-        public static void Fatal(string message, Exception? ex = null) => Write(LogLevel.Fatal, message, ex);
+        public static void Trace(string message) => Write(LogLevel.TRC, message);
+        public static void Debug(string message) => Write(LogLevel.DBG, message);
+        public static void Info(string message) => Write(LogLevel.INF, message);
+        public static void Warn(string message, Exception? ex = null) => Write(LogLevel.WRN, message, ex);
+        public static void Error(string message, Exception? ex = null) => Write(LogLevel.ERR, message, ex);
+        public static void Fatal(string message, Exception? ex = null) => Write(LogLevel.FTL, message, ex);
 
         public static void FlushLogger()
         {

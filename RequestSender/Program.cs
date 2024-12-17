@@ -18,12 +18,12 @@ namespace LoadBalancer
                         "LoadBalancerLogs"
                     )
                 );
-                Log.SetMinimumLevel(LogLevel.Trace);
+                Log.SetMinimumLevel(LogLevel.TRC);
 
                 var services = new ServiceCollection();
                 services.AddSingleton<LoadBalancer>(provider =>
                 {
-                    return new LoadBalancer(
+                    var loadBalancer = new LoadBalancer(
                         loadBalancingStrategy: new RoundRobinStrategy(),
                         httpClient: new HttpClient(),
                         enabledAutoScaling: true,
@@ -31,6 +31,9 @@ namespace LoadBalancer
                         healthCheckInterval: TimeSpan.FromSeconds(10),
                         minHealthThreshold: 90
                     );
+                    loadBalancer.Initialize(TimeSpan.FromSeconds(10));
+
+                    return loadBalancer;
                 });
 
                 var serviceProvider = services.BuildServiceProvider();
