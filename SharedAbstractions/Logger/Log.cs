@@ -7,7 +7,7 @@ namespace LoadBalancer.Logger
     {
         private static readonly ConcurrentDictionary<LogSinks, ILogger> _sinks = new();
         private static readonly object _lock = new();
-        private static LogLevel _minimumLevel = LogLevel.INF;
+        private static LogLevel _minimumLevel;
 
         static Log()
         {

@@ -36,7 +36,7 @@ namespace LoadBalancer.Logger
                 var tid = Environment.CurrentManagedThreadId;
 
                 SetConsoleColors(newColorPair);
-                Console.WriteLine($"[{DateTime.UtcNow:dd.MM.yyyy HH:mm:ss.fffffff}] [PID:{pid,6}]|[TID:{tid,3}] [{level,5}]  {message} ");
+                Console.WriteLine($"[{DateTime.UtcNow:dd.MM.yyyy HH:mm:ss.fffffff}] [PID:{pid,6}]|[TID:{tid,3}] [{level}]  {message} ");
                 SetConsoleColors(prevColorPair);
 
                 if (exception != null)
