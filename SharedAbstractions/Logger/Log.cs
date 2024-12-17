@@ -8,15 +8,25 @@ namespace LoadBalancer.Logger
         private static readonly ConcurrentDictionary<LogSinks, ILogger> _sinks = new();
         private static readonly object _lock = new();
         private static LogLevel _minimumLevel;
+        private static LogQueue? _logQueue;
 
         static Log()
         {
-            //add a default destination to the Console
             TryAddSink(LogSinks.Console, new ConsoleLogger(_minimumLevel));
+            InitializeLogQueue();
+        }
+
+        private static void InitializeLogQueue()
+        {
+            lock (_lock)
+            {
+                _logQueue?.Dispose();
+                _logQueue = new LogQueue(_sinks.Values);
+            }
         }
 
         public static void SetMinimumLevel(LogLevel level)
-        {          
+        {
             _minimumLevel = level;
             if (_sinks.Count > 0)
             {
@@ -26,34 +36,38 @@ namespace LoadBalancer.Logger
 
         public static void AddSink(LogSinks sink, string? targetDirectory = null)
         {
-            switch (sink)
+            lock (_lock)
             {
-                case LogSinks.Console:
-                    TryAddSink(sink, new ConsoleLogger(_minimumLevel));
-                    break;
-
-                case LogSinks.File:
-                    if (!string.IsNullOrWhiteSpace(targetDirectory))
-                    {
-                        TryAddSink(sink, new FileLogger(targetDirectory, _minimumLevel));
+                switch (sink)
+                {
+                    case LogSinks.Console:
+                        TryAddSink(sink, new ConsoleLogger(_minimumLevel));
                         break;
-                    }
-                    throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException), "LB-DIR-001");
 
-                case LogSinks.ConsoleAndFile:
-                    if (!string.IsNullOrWhiteSpace(targetDirectory))
-                    {
-                        TryAddSink(LogSinks.Console, new ConsoleLogger(_minimumLevel));
-                        TryAddSink(LogSinks.File, new FileLogger(targetDirectory, _minimumLevel));
-                        break;
-                    }
-                    throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException), "LB-DIR-001");
+                    case LogSinks.File:
+                        if (!string.IsNullOrWhiteSpace(targetDirectory))
+                        {
+                            TryAddSink(sink, new FileLogger(targetDirectory, _minimumLevel));
+                            break;
+                        }
+                        throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException), "LB-DIR-001");
 
-                default:
-                    throw new LoadBalancerException($"Unsupported log sink type: {sink}", typeof(NotSupportedException), "LB-LOGIC-001");
+                    case LogSinks.ConsoleAndFile:
+                        if (!string.IsNullOrWhiteSpace(targetDirectory))
+                        {
+                            TryAddSink(LogSinks.Console, new ConsoleLogger(_minimumLevel));
+                            TryAddSink(LogSinks.File, new FileLogger(targetDirectory, _minimumLevel));
+                            break;
+                        }
+                        throw new LoadBalancerException($"Target must be specified for file logging: {targetDirectory} ", typeof(ArgumentException), "LB-DIR-001");
+
+                    default:
+                        throw new LoadBalancerException($"Unsupported log sink type: {sink}", typeof(NotSupportedException), "LB-LOGIC-001");
+                }
+
+                InitializeLogQueue();
             }
         }
-
 
         private static void TryAddSink(LogSinks sink, ILogger target)
         {
@@ -65,23 +79,18 @@ namespace LoadBalancer.Logger
             if (_sinks.TryRemove(sink, out ILogger? target))
             {
                 target?.Dispose();
+                InitializeLogQueue();
             }
         }
 
         private static void Write(LogLevel level, string message, Exception? exception = null)
         {
-            if (level < _minimumLevel)
+            if (level < _minimumLevel || _logQueue == null)
             {
                 return;
             }
 
-            foreach (var target in _sinks.Values)
-            {
-                if (target.ShouldLog(level))
-                {
-                    target.Write(level, message, exception);
-                }
-            }
+            _logQueue.Enqueue(new LogEntry(level, message, exception));
         }
 
         public static void Trace(string message) => Write(LogLevel.TRC, message);
@@ -93,19 +102,22 @@ namespace LoadBalancer.Logger
 
         public static void FlushLogger()
         {
-            foreach (var sink in _sinks.Values)
-            {
-                sink.Flush();
-            }
+            _logQueue?.FlushAsync();
         }
 
         public static void Kill()
         {
-            foreach (var sink in _sinks.Values)
+            lock (_lock)
             {
-                sink.Dispose();
+                _logQueue?.Dispose();
+                _logQueue = null;
+
+                foreach (var sink in _sinks.Values)
+                {
+                    sink.Dispose();
+                }
+                _sinks.Clear();
             }
-            _sinks.Clear();
         }
 
         public static void ShutDown()
