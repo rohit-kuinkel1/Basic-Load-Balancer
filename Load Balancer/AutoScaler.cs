@@ -45,6 +45,7 @@ namespace LoadBalancer
                     await Task.Delay( _config.ScaleCheckIntervalMs );
                 }
             } );
+
         }
 
 
@@ -77,7 +78,7 @@ namespace LoadBalancer
 
         private void CleanupOldMetrics( DateTime currentTime )
         {
-            var oldMetrics = _requestMetrics.Keys.Where( k => k < currentTime.AddMinutes( -5 ) );
+            var oldMetrics = _requestMetrics.Keys.Where( k => k < currentTime.AddMinutes( -10 ) );
             foreach( var key in oldMetrics )
             {
                 _requestMetrics.TryRemove( key, out _ );
@@ -125,17 +126,18 @@ namespace LoadBalancer
             => recentRequests < _config.NumberOfMinRequestForScaleDown &&
                currentServerCount > _config.MinServers;
 
-        private void SpawnNewServer()
+        private void SpawnNewServer(int? wishPort = null)
         {
             if( _getCurrentServerCount() >= _config.MaxServers )
             {
-                Log.Fatal( $"Cannot instantiate more servers since auto scale config allows max {_config.MaxServers} and {_getCurrentServerCount()} servers are already up" );
+                Log.Fatal( $"Cannot instantiate more servers since {nameof( _config )} allows max {_config.MaxServers} servers and {_getCurrentServerCount()} servers are already up." );
                 return;
             }
 
-            var port = PortUtils.FindAvailablePort();
+            var port = wishPort ?? PortUtils.FindAvailablePort();
             //hard coded for now , remove it later
-            var scriptPath = @"D:\git\Basic-Load-Balancer\SimpleServerSetup\start_servers.ps1";
+            var scriptPath = @"D:\git\Basic-Load-Balancer\SimpleServerSetup\simpleserversetup.ps1";
+
             try
             {
                 var process = new Process
@@ -143,7 +145,7 @@ namespace LoadBalancer
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = "powershell.exe",
-                        Arguments = $"-File \"{scriptPath}\" -Port {port}",
+                        Arguments = $"-File \"{scriptPath}\" start {port}",
                         UseShellExecute = false,
                         CreateNoWindow = true
                     }
@@ -152,16 +154,41 @@ namespace LoadBalancer
 
                 Log.Info( $"Spawing up a new server instance localhost:{port}" );
                 var server = new Server( "localhost", port, CircuitBreakerConfig.Factory() );
+
                 //register this new server with the load balancer
                 _addServerCallback( server );
             }
             catch( Exception ex ) when( ex is TimeoutException or LoadBalancerException )
             {
-                {
-                    Log.Error( $"Failed to spawn a new server on port {port}: {ex.Message}" );
-                    PortUtils.ReleasePort( port );
-                }
+                Log.Error( $"Failed to spawn a new server on port {port}: {ex.Message}" );
+                PortUtils.ReleasePort( port );               
             }          
         }
+
+        public void KillServer( int port )
+        {
+            // hard coded for now, remove it later
+            var scriptPath = @"D:\git\Basic-Load-Balancer\SimpleServerSetup\simpleserversetup.ps1";
+
+            try
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-File \"{scriptPath}\" kill {port}",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                process.Start();
+            }
+            catch( Exception ex )
+            {
+                Log.Error( $"Failed to kill server on port {port}: {ex.Message}" );
+            }
+        }
+
     }
 }

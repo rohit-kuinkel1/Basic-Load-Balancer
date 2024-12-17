@@ -1,6 +1,8 @@
 param (
-    [int]$Port = 5001
+    [string]$Action, 
+    [int]$Port       
 )
+
 $ProjectPath = "D:\git\Basic-Load-Balancer\SimpleServerSetup"
 
 if (-not (Test-Path $ProjectPath)) {
@@ -8,4 +10,4 @@ if (-not (Test-Path $ProjectPath)) {
     exit 1
 }
 
-Start-Process "powershell.exe" -ArgumentList "dotnet run --project ""$ProjectPath"" -- $Port" -Wait
+Start-Process "dotnet" -ArgumentList "run --project `"$ProjectPath`" $Action $Port" -Wait

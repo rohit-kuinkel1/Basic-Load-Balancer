@@ -57,64 +57,64 @@ namespace LoadBalancer
             StartHealthDecrementTask( timeInSec: 10, decreaseAmount: 3 );
         }
 
-    public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
-    {
-        _autoScaler?.TrackRequest( DateTime.UtcNow );
-        return await SendRequestAsync();
-    }
-
-    public async Task<bool> SendRequestAsync()
-    {
-        var availableServers = _servers.Keys
-            .Where( server => server.CanHandleRequest( 1 ) )
-            .ToList();
-
-        var server = _loadBalancingStrategy.SelectServer( availableServers );
-        if( server == null )
+        public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
         {
-            return false;
+            _autoScaler?.TrackRequest( DateTime.UtcNow );
+            return await SendRequestAsync();
         }
 
-        return await _requestHandler.SendRequestAsync( server );
-    }
-
-    private void StartHealthDecrementTask( double timeInSec = 10, double decreaseAmount = 5 )
-    {
-        Task.Run( async () =>
+        public async Task<bool> SendRequestAsync()
         {
-            while( true )
+            var availableServers = _servers.Keys
+                .Where( server => server.CanHandleRequest( 1 ) )
+                .ToList();
+
+            var server = _loadBalancingStrategy.SelectServer( availableServers );
+            if( server == null )
             {
-                foreach( var server in _servers.Keys )
+                return false;
+            }
+
+            return await _requestHandler.SendRequestAsync( server );
+        }
+
+        private void StartHealthDecrementTask( double timeInSec = 10, double decreaseAmount = 5 )
+        {
+            Task.Run( async () =>
+            {
+                while( true )
                 {
-                    lock( server )
+                    foreach( var server in _servers.Keys )
                     {
-                        server.ServerHealth = Math.Max( 0, server.ServerHealth - decreaseAmount );
+                        lock( server )
+                        {
+                            server.ServerHealth = Math.Max( 0, server.ServerHealth - decreaseAmount );
+                        }
                     }
+                    //wait timeInSec seconds before decaying the health for all the servers again
+                    await Task.Delay( TimeSpan.FromSeconds( timeInSec ) );
                 }
-                //wait timeInSec seconds before decaying the health for all the servers again
-                await Task.Delay( TimeSpan.FromSeconds( timeInSec ) );
-            }
-        } );
-    }
+            } );
+        }
 
-    public async Task PerformHealthChecksAsync()
-    {
-        var tasks = _servers.Keys.Select( async server =>
+        public async Task PerformHealthChecksAsync()
         {
-            await _healthCheckService.PerformHealthCheckAsync( server );
-
-            if( !server.IsServerHealthy && server is Server s && s.CircuitBreaker.State == CircuitState.Open )
+            var tasks = _servers.Keys.Select( async server =>
             {
-                RemoveUnhealthyServer();
-            }
-            else
-            {
-                Log.Debug( $"Server {server.ServerAddress}:{server.ServerPort} is currently healthy with health {server.ServerHealth}" );
-            }
-        } );
+                await _healthCheckService.PerformHealthCheckAsync( server );
 
-        await Task.WhenAll( tasks );
-    }
+                if( !server.IsServerHealthy && server is Server s && s.CircuitBreaker.State == CircuitState.Open )
+                {
+                    RemoveUnhealthyServer();
+                }
+                else
+                {
+                    Log.Debug( $"Server {server.ServerAddress}:{server.ServerPort} is currently healthy with health {server.ServerHealth}" );
+                }
+            } );
+
+            await Task.WhenAll( tasks );
+        }
 
         private void RemoveUnhealthyServer( bool forceRemoval = false )
         {
@@ -124,19 +124,19 @@ namespace LoadBalancer
             {
                 strm = _servers.Keys
                     .OfType<IServer>()
-                    .OrderBy( server => server.ServerHealth )  
+                    .OrderBy( server => server.ServerHealth )
                     .FirstOrDefault();
             }
             else
             {
                 strm = _servers.Keys
                     .OfType<IServer>()
-                    .Where( server => server.ServerHealth < 80 ) 
-                    .OrderBy( server => server.ServerHealth ) 
+                    .Where( server => server.ServerHealth < 80 )
+                    .OrderBy( server => server.ServerHealth )
                     .FirstOrDefault();
             }
 
-            if( strm is Server serverToRemove)
+            if( strm is Server serverToRemove )
             {
 
                 Log.Info( $"Initiating removal for unhealthy server: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}. Circuit status: {serverToRemove.CircuitBreaker.State}" );
@@ -160,6 +160,7 @@ namespace LoadBalancer
                     }
 
                     PortUtils.ReleasePort( serverToRemove.ServerPort );
+                    _autoScaler?.KillServer( serverToRemove.ServerPort );
                     Log.Warn( $"Server removed from pool with port release: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
                 } );
             }
@@ -167,9 +168,22 @@ namespace LoadBalancer
         }
 
         public void StopHealthChecks()
-    {
-        _healthCheckTimer?.Stop();
-        _healthCheckTimer?.Dispose();
+        {
+            _healthCheckTimer?.Stop();
+            _healthCheckTimer?.Dispose();
+        }
+
+        public void Destroy()
+        {
+            Log.Warn( $"Killing all the instantiated servers before exit Count:{_servers.Count}" );
+            foreach( var server in _servers.Keys )
+            {
+                int port = server.ServerPort;
+
+                _autoScaler?.KillServer( port );
+            }
+            _servers.Clear();
+            Log.Warn( $"Cleanup complete Count:{_servers.Count}" );
+        }
     }
-}
 }

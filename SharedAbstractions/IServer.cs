@@ -12,5 +12,7 @@
         void RemoveLoad(int requestCount);
         void RecordRequest(bool success, long responseTimeMs);
         void UpdateHealthStatus(bool isHealthy);
+
+        void EnableDrainMode();
     }
 }

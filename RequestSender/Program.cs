@@ -8,6 +8,7 @@ namespace LoadBalancer
     {
         public static async Task Main(string[] args)
         {
+            LoadBalancer? loadBalancer = null;
             try
             {
 
@@ -37,7 +38,7 @@ namespace LoadBalancer
                 });
 
                 var serviceProvider = services.BuildServiceProvider();
-                var loadBalancer = serviceProvider.GetRequiredService<LoadBalancer>();
+                loadBalancer = serviceProvider.GetRequiredService<LoadBalancer>();
 
                 await SimulateTraffic(loadBalancer);
             }
@@ -45,6 +46,10 @@ namespace LoadBalancer
             {
                 Log.Error("An error occurred", ex);
                 Environment.Exit(1);
+            }
+            finally 
+            {
+                loadBalancer?.Destroy();
             }
         }
 
@@ -55,10 +60,10 @@ namespace LoadBalancer
                 //for 10 sec, send 1 req
                 (10, 1),
                 //for 60 sec, send 10 req
-                (60, 3),
+                (6, 3),
                 (5, 1000),
-                (9, 40000),
-                (5, 20000),
+                (20, 1),
+                (15, 1000),
             };
 
             foreach (var pattern in trafficPatterns)
@@ -87,11 +92,11 @@ namespace LoadBalancer
                         }));
                     }
 
-                    await Task.Delay(5000);
+                    await Task.Delay(15000);
                 }
 
                 await Task.WhenAll(tasks);
-                Log.Info($"Finished traffic simulation: {pattern.RequestsPerSecond} requests/second.");
+                Log.Info($"Finished traffic simulation: {pattern.RequestsPerSecond} requests/second.\n\n");
             }
         }
     }

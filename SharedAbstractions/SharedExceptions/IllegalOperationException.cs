@@ -3,7 +3,7 @@
     /// <summary>
     /// Exception thrown when a fatal operation cannot continue.
     /// </summary>
-    internal class IllegalOperation : LoadBalancerException
+    public class IllegalOperation : LoadBalancerException
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="IllegalOperation"/> class.
