@@ -5,8 +5,8 @@ namespace LoadBalancer
     {
         public int MinServers { get; init; } = 2;
         public int MaxServers { get; init; } = 4;
-        public int NumberOfMaxRequestForScaleUp { get; init; } = 100;
-        public int NumberOfMinRequestForScaleDown { get; init; } = 20;
+        public int NumberOfTotalMaxRequestForScaleUp { get; init; } = 100;
+        public int NumberOfTotalMinRequestForScaleDown { get; init; } = 20;
         public TimeSpan ScaleCheckIntervalMs { get; init; } = TimeSpan.FromMilliseconds( 1000 );
 
         public static AutoScalingConfig Default => new();
@@ -22,8 +22,8 @@ namespace LoadBalancer
             {
                 MinServers = minServers ?? 2,
                 MaxServers = maxServers ?? 4,
-                NumberOfMaxRequestForScaleUp = requestThresholdForScaleUp ?? 100,
-                NumberOfMinRequestForScaleDown = requestThresholdForScaleDown ?? 20,
+                NumberOfTotalMaxRequestForScaleUp = requestThresholdForScaleUp ?? 100,
+                NumberOfTotalMinRequestForScaleDown = requestThresholdForScaleDown ?? 20,
                 ScaleCheckIntervalMs = TimeSpan.FromMilliseconds( scaleCheckIntervalMs ?? 1000 )
             };
         }
@@ -35,10 +35,10 @@ namespace LoadBalancer
             => this with { MaxServers = maxServers };
 
         public AutoScalingConfig WithScaleUpThreshold( int threshold )
-            => this with { NumberOfMaxRequestForScaleUp = threshold };
+            => this with { NumberOfTotalMaxRequestForScaleUp = threshold };
 
         public AutoScalingConfig WithScaleDownThreshold( int threshold )
-            => this with { NumberOfMinRequestForScaleDown = threshold };
+            => this with { NumberOfTotalMinRequestForScaleDown = threshold };
 
         public AutoScalingConfig WithScaleCheckInterval( TimeSpan interval )
             => this with { ScaleCheckIntervalMs = interval };
@@ -55,14 +55,14 @@ namespace LoadBalancer
                 throw new ArgumentException( $"{nameof(MaxServers)} must be greater than or equal to {nameof(MinServers)}" );
             }
 
-            if( NumberOfMaxRequestForScaleUp <= 0 )
+            if( NumberOfTotalMaxRequestForScaleUp <= 0 )
             {
-                throw new ArgumentException( $"{nameof(NumberOfMaxRequestForScaleUp)} threshold must be positive", nameof( NumberOfMaxRequestForScaleUp ) );
+                throw new ArgumentException( $"{nameof(NumberOfTotalMaxRequestForScaleUp)} threshold must be positive", nameof( NumberOfTotalMaxRequestForScaleUp ) );
             }
 
-            if( NumberOfMinRequestForScaleDown < 0 )
+            if( NumberOfTotalMinRequestForScaleDown < 0 )
             {
-                throw new ArgumentException( $"{nameof( NumberOfMinRequestForScaleDown )} cannot be negative", nameof( NumberOfMinRequestForScaleDown ) );
+                throw new ArgumentException( $"{nameof( NumberOfTotalMinRequestForScaleDown )} cannot be negative", nameof( NumberOfTotalMinRequestForScaleDown ) );
             }
         }
     }

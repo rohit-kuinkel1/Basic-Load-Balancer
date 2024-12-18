@@ -63,11 +63,13 @@ namespace LoadBalancer
             try
             {
                 var currentTime = DateTime.UtcNow;
+
+                //30 seconds makes sure that the scaling down isnt as aggressive, if the time is for example 5 seconds, then the scale down is too aggressive
                 var recentRequests = _requestMetrics
-                    .Where( kvp => kvp.Key > currentTime.AddSeconds( -5 ) )
+                    .Where( kvp => kvp.Key > currentTime.AddSeconds( -30 ) )
                     .Sum( kvp => kvp.Value );
 
-                CleanupOldMetrics( currentTime );
+                CleanupOldMetrics();
                 EvaluateAndScale( recentRequests );
             }
             catch( Exception ex ) when( ex is LoadBalancerException )
@@ -76,27 +78,29 @@ namespace LoadBalancer
             }
         }
 
-        private void CleanupOldMetrics( DateTime currentTime )
+        private void CleanupOldMetrics( DateTime? currentTime = null)
         {
-            var oldMetrics = _requestMetrics.Keys.Where( k => k < currentTime.AddMinutes( -10 ) );
+            var currentTime1 = currentTime ?? DateTime.UtcNow;
+           
+            var oldMetrics = _requestMetrics.Keys.Where( k => k < currentTime1.AddMinutes( -5 ) );
             foreach( var key in oldMetrics )
             {
                 _requestMetrics.TryRemove( key, out _ );
             }
         }
 
-        private void EvaluateAndScale( int recentRequests )
+        private void EvaluateAndScale( int recentRequestsCount )
         {
             lock( _scalingLock )
             {
                 var currentServerCount = _getCurrentServerCount();
-                var isScalingUpNecessary = ShouldScaleUp( recentRequests, currentServerCount );
+                var isScalingUpNecessary = ShouldScaleUp( recentRequestsCount, currentServerCount );
                 if( isScalingUpNecessary )
                 {
                     SpawnNewServer();
                     Log.Info( $"Scaling up: Added new server. Total servers: {currentServerCount + 1}" );
                 }
-                else if( ShouldScaleDown( recentRequests, currentServerCount ) )
+                else if( ShouldScaleDown( recentRequestsCount, currentServerCount ) )
                 {
                     _removeServerCallback(true);
                     Log.Info( $"Scaling down: Removed a server. Total servers: {currentServerCount - 1}" );
@@ -113,7 +117,7 @@ namespace LoadBalancer
         /// <param name="currentServerCount"></param>
         /// <returns></returns>
         private bool ShouldScaleUp( int recentRequests, int currentServerCount )
-            => recentRequests > _config.NumberOfMaxRequestForScaleUp &&
+            => recentRequests > _config.NumberOfTotalMaxRequestForScaleUp &&
                currentServerCount < _config.MaxServers;
 
         /// <summary>
@@ -123,10 +127,10 @@ namespace LoadBalancer
         /// <param name="currentServerCount"></param>
         /// <returns></returns>
         private bool ShouldScaleDown( int recentRequests, int currentServerCount )
-            => recentRequests < _config.NumberOfMinRequestForScaleDown &&
+            => recentRequests < _config.NumberOfTotalMinRequestForScaleDown &&
                currentServerCount > _config.MinServers;
 
-        private void SpawnNewServer(int? wishPort = null)
+        private void SpawnNewServer(int? preferredPort = null)
         {
             if( _getCurrentServerCount() >= _config.MaxServers )
             {
@@ -134,7 +138,7 @@ namespace LoadBalancer
                 return;
             }
 
-            var port = wishPort ?? PortUtils.FindAvailablePort();
+            var port = preferredPort ?? PortUtils.FindAvailablePort();
             //hard coded for now , remove it later
             var scriptPath = @"D:\git\Basic-Load-Balancer\SimpleServerSetup\simpleserversetup.ps1";
 
@@ -160,7 +164,7 @@ namespace LoadBalancer
             }
             catch( Exception ex ) when( ex is TimeoutException or LoadBalancerException )
             {
-                Log.Error( $"Failed to spawn a new server on port {port}: {ex.Message}" );
+                Log.Error( $"Failed to spawn a new server on port {port}, releasing this port: {ex.Message}" );
                 PortUtils.ReleasePort( port );               
             }          
         }
