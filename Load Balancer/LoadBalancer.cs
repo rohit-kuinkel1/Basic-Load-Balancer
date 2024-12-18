@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using LoadBalancer.Interfaces;
 using LoadBalancer.Logger;
+using LoadBalancer.RequestCache;
 
 namespace LoadBalancer
 {
@@ -11,6 +13,7 @@ namespace LoadBalancer
         private readonly HealthCheckService _healthCheckService;
         private readonly RequestHandler _requestHandler;
         private readonly IAutoScaler? _autoScaler;
+        private readonly CachedRequestsManager? _cachedRequestsManager;
         private System.Timers.Timer? _healthCheckTimer;
         private readonly int _minHealthThreshold;
 
@@ -20,12 +23,14 @@ namespace LoadBalancer
         bool enabledAutoScaling = false,
         AutoScalingConfig? autoScalingConfig = null,
         TimeSpan healthCheckInterval = default,
-        int minHealthThreshold = 70
+        int minHealthThreshold = 70,
+        CachedRequestsManager? cachedRequestsManager = null
     )
         {
             _loadBalancingStrategy = loadBalancingStrategy ?? new RoundRobinStrategy();
             _healthCheckService = new HealthCheckService( httpClient ?? new HttpClient() );
             _requestHandler = new RequestHandler( httpClient ?? new HttpClient() );
+            _cachedRequestsManager = cachedRequestsManager ?? new CachedRequestsManager( HandleRequestAsync );
             _minHealthThreshold = minHealthThreshold;
 
             if( enabledAutoScaling )
@@ -60,10 +65,21 @@ namespace LoadBalancer
         public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
         {
             _autoScaler?.TrackRequest( DateTime.UtcNow );
-            return await SendRequestAsync();
+            var success = await SendRequestAsync();
+            if( success )
+            {
+                Log.Info( "Response:OK" );
+            }
+            else
+            {
+                _cachedRequestsManager?.CacheFailedRequest( request );
+                Log.Error( "Response: Failed" );
+            }
+
+            return success;
         }
 
-        public async Task<bool> SendRequestAsync()
+    public async Task<bool> SendRequestAsync()
         {
             var availableServers = _servers.Keys
                 .Where( server => server.CanHandleRequest( 1 ) )

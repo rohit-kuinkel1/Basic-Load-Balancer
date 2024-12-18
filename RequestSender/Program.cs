@@ -1,5 +1,6 @@
 ﻿using LoadBalancer.Exceptions;
 using LoadBalancer.Logger;
+using LoadBalancer.RequestCache;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LoadBalancer
@@ -89,6 +90,7 @@ namespace LoadBalancer
                             }
                             else
                             {
+                                //TODO: when a request fails, cache it and save it according to the time, and when healthy servers are present, then send the requests following FIFO
                                 Log.Error("Request: Failed");
                             }
                         }));
