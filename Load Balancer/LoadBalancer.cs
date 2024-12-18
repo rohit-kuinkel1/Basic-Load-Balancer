@@ -159,8 +159,9 @@ namespace LoadBalancer
                         _servers.TryAdd( srv, true );
                     }
 
-                    PortUtils.ReleasePort( serverToRemove.ServerPort );
                     _autoScaler?.KillServer( serverToRemove.ServerPort );
+                    PortUtils.ReleasePort( serverToRemove.ServerPort );
+
                     Log.Warn( $"Server removed from pool with port release: {serverToRemove.ServerAddress}:{serverToRemove.ServerPort}" );
                 } );
             }
@@ -173,17 +174,24 @@ namespace LoadBalancer
             _healthCheckTimer?.Dispose();
         }
 
-        public void Destroy()
+        public async Task DestroyAsync()
         {
-            Log.Warn( $"Killing all the instantiated servers before exit Count:{_servers.Count}" );
+            Log.Warn( $"Killing all the instantiated servers before exit. Count: {_servers.Count}" );
+
+            var killServerTasks = new List<Task>();
             foreach( var server in _servers.Keys )
             {
-                int port = server.ServerPort;
-
-                _autoScaler?.KillServer( port );
+                if( _autoScaler != null )
+                {
+                    killServerTasks.Add( Task.Run( () => _autoScaler.KillServer( server.ServerPort ) ) );
+                }
             }
+
+            await Task.WhenAll( killServerTasks );
+
             _servers.Clear();
-            Log.Warn( $"Cleanup complete Count:{_servers.Count}" );
+            Log.Warn( $"Cleanup complete. Count: {_servers.Count}" );
         }
+
     }
 }

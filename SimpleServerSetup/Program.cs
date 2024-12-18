@@ -6,6 +6,8 @@ using SimpleServer.Middleware;
 using System.Diagnostics;
 using System.Linq;
 using LoadBalancer.Logger;
+using Microsoft.Extensions.Logging;
+using LoadBalancer;
 namespace SimpleServer
 {
     public class Program
@@ -19,7 +21,7 @@ namespace SimpleServer
                        "LoadBalancerLogs"
                    )
             );
-            Log.SetMinimumLevel( LogLevel.TRC );
+            Log.SetMinimumLevel( LoadBalancer.Logger.LogLevel.TRC );
 
             if( args.Length > 0 )
             {
@@ -32,8 +34,7 @@ namespace SimpleServer
                 {
                     StartServer( args.Length > 1 ? args[1] : "5001" );
                     return;
-                }
-                Console.ReadLine();
+                }               
             }
 
             Console.WriteLine( "Usage: \n- To start the server: start [port(int)] \n- To kill process on port: kill [port(int)]" );
@@ -76,14 +77,14 @@ namespace SimpleServer
             try
             {
                 var processId = GetProcessIdUsingPort( port );
-                Log.Debug( $"Found process with PID {processId} occupying port {port}" );
                 if( processId == -1 )
                 {
-                    Log.Warn( $"No process is running on port {port}." );
+                    Log.Warn( $"No process with PID {processId} found that is occupying port {port}." );
                     return;
                 }
 
-                KillProcess( processId );
+                Log.Debug( $"Found process with PID {processId} occupying port {port}" );
+                KillProcess( processId );            
             }
             catch( Exception ex )
             {
@@ -93,31 +94,61 @@ namespace SimpleServer
 
         private static int GetProcessIdUsingPort( string port )
         {
-            var startInfo = new ProcessStartInfo
+            try
             {
-                FileName = "netstat",
-                Arguments = $"-ano | findstr :{port}",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using( var process = Process.Start( startInfo ) )
-            {
-                using( var reader = process?.StandardOutput )
+                var startInfo = new ProcessStartInfo
                 {
-                    var output = reader?.ReadToEnd();
-                    if( string.IsNullOrEmpty( output ) )
+                    FileName = "netstat",
+                    Arguments = "-ano",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                Log.Debug( $"Trying to get PID for the process occupying port {port}" );
+
+                using( var process = Process.Start( startInfo ) )
+                {
+                    if( process == null )
                     {
+                        Log.Error( "Failed to start process for netstat." );
                         return -1;
                     }
-                    Log.Debug( $"Line is {output}" );
-                    var lines = output.Split( new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries );
-                    var pid = lines.FirstOrDefault()?.Split( new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries ).Last();
-                    return int.TryParse( pid, out var processId ) ? processId : -1;
+
+                    using( var reader = process.StandardOutput )
+                    {
+                        var output = reader.ReadToEnd();
+                        Log.Debug( $"Netstat raw output:\n{output}" );
+
+                        if( string.IsNullOrEmpty( output ) )
+                        {
+                            Log.Warn( "Netstat output was empty." );
+                            return -1;
+                        }
+
+                        var lines = output.Split( new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries )
+                                          .Where( line => line.Contains( $":{port}" ) );
+
+                        foreach( var line in lines )
+                        {
+                            Log.Debug( $"{line}" );
+                            var parts = line.Split( new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries );
+                            if( parts.Length > 4 && int.TryParse( parts[^1], out var processId ) )
+                            {
+                                return processId;
+                            }
+                        }
+                    }
                 }
             }
+            catch( Exception ex )
+            {
+                Log.Error( $"Error in GetProcessIdUsingPort: {ex.Message}" );
+            }
+
+            return -1;
         }
+
 
         private static void KillProcess( int processId )
         {

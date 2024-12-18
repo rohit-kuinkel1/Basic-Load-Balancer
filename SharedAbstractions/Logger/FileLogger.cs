@@ -62,7 +62,7 @@ namespace LoadBalancer.Logger
                 _currentFileDate = DateTime.UtcNow;
 
                 var stackTrace = new System.Diagnostics.StackTrace();
-                string callingAssemblyName = "UnknownAssembly";
+                string callingAssemblyName = string.Empty;
 
                 for (int i = 0; i < stackTrace.FrameCount; i++)
                 {
@@ -70,7 +70,7 @@ namespace LoadBalancer.Logger
                     if (frame?.GetMethod()?.DeclaringType?.Assembly != null)
                     {
                         var assembly = frame.GetMethod().DeclaringType.Assembly;
-                        if (!assembly.FullName.Contains("SharedAbstractions"))
+                        if (!assembly.FullName.Contains(System.Reflection.Assembly.GetCallingAssembly().GetName().Name)) //SharedAbstractions for now => System.Reflection.Assembly.GetCallingAssembly().GetName().Name
                         {
                             callingAssemblyName = assembly.GetName().Name ?? string.Empty;
                             break;
