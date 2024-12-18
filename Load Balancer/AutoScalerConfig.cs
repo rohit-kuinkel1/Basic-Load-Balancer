@@ -7,7 +7,7 @@ namespace LoadBalancer
         public int MaxServers { get; init; } = 4;
         public int NumberOfMaxRequestForScaleUp { get; init; } = 100;
         public int NumberOfMinRequestForScaleDown { get; init; } = 20;
-        public TimeSpan ScaleCheckIntervalMs { get; init; } = TimeSpan.FromMilliseconds( 100 );
+        public TimeSpan ScaleCheckIntervalMs { get; init; } = TimeSpan.FromMilliseconds( 1000 );
 
         public static AutoScalingConfig Default => new();
 
@@ -18,13 +18,13 @@ namespace LoadBalancer
             int? requestThresholdForScaleDown = null,
             int? scaleCheckIntervalMs = null )
         {
-            return new()
+            return new AutoScalingConfig()
             {
                 MinServers = minServers ?? 2,
                 MaxServers = maxServers ?? 4,
                 NumberOfMaxRequestForScaleUp = requestThresholdForScaleUp ?? 100,
                 NumberOfMinRequestForScaleDown = requestThresholdForScaleDown ?? 20,
-                ScaleCheckIntervalMs = TimeSpan.FromMilliseconds( scaleCheckIntervalMs ?? 100 )
+                ScaleCheckIntervalMs = TimeSpan.FromMilliseconds( scaleCheckIntervalMs ?? 1000 )
             };
         }
 

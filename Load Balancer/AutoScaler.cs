@@ -167,12 +167,11 @@ namespace LoadBalancer
 
         public void KillServer( int port )
         {
-            // hard coded for now, remove it later
             var scriptPath = @"D:\git\Basic-Load-Balancer\SimpleServerSetup\simpleserversetup.ps1";
 
             try
             {
-                var process = new Process
+                using( var process = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
@@ -181,14 +180,22 @@ namespace LoadBalancer
                         UseShellExecute = false,
                         CreateNoWindow = true
                     }
-                };
-                process.Start();
+                } )
+                {
+                    process.Start();
+                    process.WaitForExit();
+                    if( process.ExitCode != 0 )
+                    {
+                        Log.Warn( $"Process to kill server on port {port} exited with code {process.ExitCode}" );
+                    }
+                }
             }
             catch( Exception ex )
             {
                 Log.Error( $"Failed to kill server on port {port}: {ex.Message}" );
             }
         }
+
 
     }
 }

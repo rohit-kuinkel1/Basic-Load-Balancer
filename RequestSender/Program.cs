@@ -60,10 +60,10 @@ namespace LoadBalancer
                 //for 10 sec, send 1 req
                 (10, 1),
                 //for 60 sec, send 10 req
-                (6, 3),
-                (5, 1000),
-                (20, 1),
-                (15, 1000),
+                //(20, 3),
+                //(5, 1000),
+               // (20, 1),
+               // (15, 1000),
             };
 
             foreach (var pattern in trafficPatterns)

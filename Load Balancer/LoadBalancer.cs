@@ -42,7 +42,7 @@ namespace LoadBalancer
         public void Initialize( TimeSpan healthCheckInterval )
         {
             _autoScaler?.Initialize();
-            Log.Info( "Load Balancer initialized with auto-scaling enabled." );
+            Log.Info( $"Load Balancer initialized with auto-scaling enabled. Current active servers: {_servers.Count}" );
 
             _healthCheckTimer = new System.Timers.Timer
             {

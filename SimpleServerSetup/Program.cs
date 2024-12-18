@@ -5,13 +5,16 @@ using SimpleServer.Interfaces;
 using SimpleServer.Middleware;
 using System.Diagnostics;
 using System.Linq;
-
+using LoadBalancer.Logger;
 namespace SimpleServer
 {
     public class Program
     {
         public static void Main( string[] args )
         {
+            Log.AddSink(LogSinks.Console);
+            Log.SetMinimumLevel( LogLevel.TRC );
+
             if( args.Length > 0 )
             {
                 if( args[0].ToLowerInvariant() == "kill" && args.Length > 1 )
@@ -66,9 +69,10 @@ namespace SimpleServer
             try
             {
                 var processId = GetProcessIdUsingPort( port );
+                Log.Debug( $"Found process with PID {processId} occupying port {port}" );
                 if( processId == -1 )
                 {
-                    Console.WriteLine( $"No process is running on port {port}." );
+                    Log.Warn( $"No process is running on port {port}." );
                     return;
                 }
 
@@ -76,7 +80,7 @@ namespace SimpleServer
             }
             catch( Exception ex )
             {
-                Console.WriteLine( $"Error killing process: {ex.Message}" );
+                Log.Error( $"Error killing process: {ex.Message}" );
             }
         }
 
@@ -101,14 +105,16 @@ namespace SimpleServer
                         return -1;
                     }
 
-                    var pid = output.Split( new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries ).Last();
-                    return int.Parse( pid );
+                    var lines = output.Split( new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries );
+                    var pid = lines.FirstOrDefault()?.Split( new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries ).Last();
+                    return int.TryParse( pid, out var processId ) ? processId : -1;
                 }
             }
         }
 
         private static void KillProcess( int processId )
         {
+            Log.Debug( $"Killing Process with PID: {processId}" );
             var startInfo = new ProcessStartInfo
             {
                 FileName = "taskkill",
@@ -121,7 +127,15 @@ namespace SimpleServer
             using( var process = Process.Start( startInfo ) )
             {
                 process?.WaitForExit();
-                Console.WriteLine( $"Successfully killed process with PID {processId}." );
+                try
+                {
+                    Process.GetProcessById( processId );
+                    Log.Error( $"Process with PID {processId} still exists..." );
+                }
+                catch( ArgumentException )
+                {
+                    Log.Debug( $"Successfully killed process with PID {processId}." );
+                }              
             }
         }
     }
