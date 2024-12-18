@@ -60,9 +60,26 @@ namespace LoadBalancer.Logger
             lock (_lock)
             {
                 _currentFileDate = DateTime.UtcNow;
-                string fileName = $"LoadBalancer__{_currentFileDate:dd_MM_yy__HH_mm_ss}.log";
-                string logFileFullPath = Path.Combine(_targetDirectoryPath, fileName);
 
+                var stackTrace = new System.Diagnostics.StackTrace();
+                string callingAssemblyName = "UnknownAssembly";
+
+                for (int i = 0; i < stackTrace.FrameCount; i++)
+                {
+                    var frame = stackTrace.GetFrame(i);
+                    if (frame?.GetMethod()?.DeclaringType?.Assembly != null)
+                    {
+                        var assembly = frame.GetMethod().DeclaringType.Assembly;
+                        if (!assembly.FullName.Contains("SharedAbstractions"))
+                        {
+                            callingAssemblyName = assembly.GetName().Name ?? string.Empty;
+                            break;
+                        }
+                    }
+                }
+
+                string fileName = $"LoadBalancer__{callingAssemblyName}__{_currentFileDate:dd_MM_yy__HH_mm_ss}.log";
+                string logFileFullPath = Path.Combine(_targetDirectoryPath, fileName);
                 _writer = new StreamWriter(logFileFullPath, true, Encoding.UTF8) { AutoFlush = true };
             }
         }

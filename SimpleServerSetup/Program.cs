@@ -12,7 +12,13 @@ namespace SimpleServer
     {
         public static void Main( string[] args )
         {
-            Log.AddSink(LogSinks.Console);
+            Log.AddSink(
+                   LogSinks.ConsoleAndFile,
+                   Path.Combine(
+                       Environment.GetFolderPath( Environment.SpecialFolder.Desktop ),
+                       "LoadBalancerLogs"
+                   )
+            );
             Log.SetMinimumLevel( LogLevel.TRC );
 
             if( args.Length > 0 )
@@ -27,9 +33,10 @@ namespace SimpleServer
                     StartServer( args.Length > 1 ? args[1] : "5001" );
                     return;
                 }
+                Console.ReadLine();
             }
 
-            Console.WriteLine( "Usage: \n- To start the server: start [port] \n- To kill process on port: kill [port]" );
+            Console.WriteLine( "Usage: \n- To start the server: start [port(int)] \n- To kill process on port: kill [port(int)]" );
         }
 
         private static void StartServer( string port )
@@ -104,7 +111,7 @@ namespace SimpleServer
                     {
                         return -1;
                     }
-
+                    Log.Debug( $"Line is {output}" );
                     var lines = output.Split( new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries );
                     var pid = lines.FirstOrDefault()?.Split( new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries ).Last();
                     return int.TryParse( pid, out var processId ) ? processId : -1;
