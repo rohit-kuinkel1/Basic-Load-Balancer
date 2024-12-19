@@ -7,6 +7,47 @@ namespace LoadBalancer
 {
     public class Program
     {
+        private static async Task SimulateTraffic(LoadBalancer loadBalancer)
+        {
+            List<(int DurationInSeconds, int RequestsPerSecond)> trafficPatterns = new()
+            {
+                //for 10 sec, send 1 req
+                (10, 1),
+                //for 60 sec, send 10 req
+                (20, 500),
+                (20, 3000),
+                (10, 1),
+                (20, 700),
+                (20, 5),
+                (30, 500),
+            };
+
+            foreach (var pattern in trafficPatterns)
+            {
+                Log.Info($"Simulating traffic: {pattern.RequestsPerSecond} requests/second for {pattern.DurationInSeconds} seconds.");
+
+                var tasks = new List<Task>();
+                var endTime = DateTime.UtcNow.AddSeconds(pattern.DurationInSeconds);
+
+                while (DateTime.UtcNow < endTime)
+                {
+                    for (int i = 0; i < pattern.RequestsPerSecond; i++)
+                    {
+                        tasks.Add(Task.Run(async () =>
+                        {
+                            var dummyRequest = new HttpRequestMessage(HttpMethod.Get, "http://localhost");
+                            var wasRequestHandled = await loadBalancer.HandleRequestAsync(dummyRequest);
+                        }));
+                    }
+
+                    await Task.Delay(5000);
+                }
+
+                await Task.WhenAll(tasks);
+                Log.Info($"Finished traffic simulation: {pattern.RequestsPerSecond} requests/second.\n\n");
+            }
+        }
+
         public static async Task Main(string[] args)
         {
             LoadBalancer? loadBalancer = null;
@@ -52,47 +93,6 @@ namespace LoadBalancer
             {
                 await loadBalancer!.DestroyAsync();
             }
-        }
-
-        private static async Task SimulateTraffic(LoadBalancer loadBalancer)
-        {
-            List<(int DurationInSeconds, int RequestsPerSecond)> trafficPatterns = new()
-            {
-                //for 10 sec, send 1 req
-                (10, 1),
-                //for 60 sec, send 10 req
-                (20, 500),
-                (20, 3000),
-                (10, 1),
-                (60, 700),
-                (20, 5),
-                (30, 500),
-            };
-
-            foreach (var pattern in trafficPatterns)
-            {
-                Log.Info($"Simulating traffic: {pattern.RequestsPerSecond} requests/second for {pattern.DurationInSeconds} seconds.");
-
-                var tasks = new List<Task>();
-                var endTime = DateTime.UtcNow.AddSeconds(pattern.DurationInSeconds);
-
-                while (DateTime.UtcNow < endTime)
-                {
-                    for (int i = 0; i < pattern.RequestsPerSecond; i++)
-                    {
-                        tasks.Add(Task.Run(async () =>
-                        {
-                            var dummyRequest = new HttpRequestMessage(HttpMethod.Get, "http://localhost");
-                            var wasRequestHandled = await loadBalancer.HandleRequestAsync(dummyRequest);
-                        }));
-                    }
-
-                    await Task.Delay(5000);
-                }
-
-                await Task.WhenAll(tasks);
-                Log.Info($"Finished traffic simulation: {pattern.RequestsPerSecond} requests/second.\n\n");
-            }
-        }
+        }    
     }
 }

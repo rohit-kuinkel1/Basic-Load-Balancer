@@ -19,23 +19,23 @@ namespace LoadBalancer
         private readonly AutoScalingConfig _config;
         private readonly ConcurrentDictionary<DateTime, int> _requestMetrics = new();
         private readonly object _scalingLock = new object();
-        private readonly Func<Server> _serverFactory;
         private readonly Action<IServer> _addServerCallback;
         private readonly Action<bool> _removeServerCallback;
         private readonly Func<int> _getCurrentServerCount;
+        private readonly Func<Task> _handleScaleDownRequest;
 
         public AutoScaler(
             AutoScalingConfig config,
-            Func<Server> serverFactory,
             Action<IServer> addServerCallback,
             Action<bool> removeServerCallback,
-            Func<int> getCurrentServerCount )
+            Func<int> getCurrentServerCount,
+            Func<Task> handleScaleDownRequest)
         {
             _config = config ?? throw new ArgumentNullException( nameof( config ) );
-            _serverFactory = serverFactory ?? throw new ArgumentNullException( nameof( serverFactory ) );
             _addServerCallback = addServerCallback ?? throw new ArgumentNullException( nameof( addServerCallback ) );
             _removeServerCallback = removeServerCallback ?? throw new ArgumentNullException( nameof( removeServerCallback ) );
             _getCurrentServerCount = getCurrentServerCount ?? throw new ArgumentNullException( nameof( getCurrentServerCount ) );
+            _handleScaleDownRequest = handleScaleDownRequest ?? throw new ArgumentNullException( nameof( handleScaleDownRequest ) );
         }
 
         public int GetRequestCountForTimeWindow( int seconds )
@@ -50,6 +50,14 @@ namespace LoadBalancer
             return recentRequests;
         }
 
+        //dont like this approach, will modify this in the future
+        public void SpawnServers(int count = 0, bool bypassRestrictions = false)
+        {
+            for( int i = 0; i < count; i++ )
+            {
+                SpawnNewServer(null, bypassRestrictions);
+            }
+        }
 
         public void Initialize()
         {
@@ -122,6 +130,7 @@ namespace LoadBalancer
                 }
                 else if( ShouldScaleDown( recentRequestsCount, currentServerCount ) )
                 {
+                    _handleScaleDownRequest();
                     _removeServerCallback( true );
                     Log.Info( $"Scaling down: Removed a server. Total servers: {currentServerCount - 1}" );
                 }
@@ -150,9 +159,9 @@ namespace LoadBalancer
             => recentRequests < _config.NumberOfTotalMinRequestForScaleDown &&
                currentServerCount > _config.MinServers;
 
-        private void SpawnNewServer( int? preferredPort = null )
+        private void SpawnNewServer( int? preferredPort = null, bool bypassRestrictions = false )
         {
-            if( _getCurrentServerCount() >= _config.MaxServers )
+            if( _getCurrentServerCount() >= _config.MaxServers && !bypassRestrictions)
             {
                 Log.Fatal( $"Cannot instantiate more servers since {nameof( _config )} allows " +
                     $"max {_config.MaxServers} servers and {_getCurrentServerCount()} servers are already up." );

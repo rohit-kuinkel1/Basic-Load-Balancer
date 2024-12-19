@@ -38,15 +38,11 @@ namespace LoadBalancer
             {
                 _autoScaler = new AutoScaler(
                     autoScalingConfig ?? AutoScalingConfig.Factory(),
-                    () => new Server(
-                            Server.DefaultAddress,
-                            PortUtils.FindAvailablePort(),
-                            CircuitBreakerConfig.Factory(),
-                            80,
-                            100 ),
                     server => _servers.TryAdd( server, true ),
                     RemoveServer,
-                    () => _servers.Count );
+                    () => _servers.Count,
+                    HandleScaleDownRequest
+                );
             }
         }
 
@@ -65,6 +61,7 @@ namespace LoadBalancer
             _healthCheckTimer.Elapsed += async ( _, _ ) => await PerformHealthChecksAsync();
             _healthCheckTimer.Start();
 
+            //simulate health decay, static for now
             StartHealthDecrementTask( timeInSec: 10, decreaseAmount: 3 );
         }
 
@@ -86,79 +83,6 @@ namespace LoadBalancer
             return success;
         }
 
-        private async Task ProcessCachedRequestsBatchAsync()
-        {
-            //ensures we dont start multiple processing sessions simultaneously
-            if( _isProcessingCachedRequests )
-            {
-                return;
-            }
-
-            lock( _processingLock )
-            {
-                if( _isProcessingCachedRequests )
-                { 
-                    return; 
-                }
-                _isProcessingCachedRequests = true;
-            }
-
-            const int maxBatchSize = 5;
-            const int maxRetries = 1;
-            var processedCount = 0;
-            var retryCount = 0;
-
-            try
-            {
-                if( !_servers.Keys.Any( s => s.ServerHealth > _minHealthThreshold ) )
-                {
-                    Log.Debug( $"No healthy servers available for processing cached requests, total cached requests:{_cachedRequestsManager?.GetCachedRequestCount()}" );
-                    return;
-                }
-
-                while( processedCount < maxBatchSize && _cachedRequestsManager.HasCachedRequests() )
-                {
-                    var request = _cachedRequestsManager.GetNextCachedRequest();
-                    if( request == null )
-                    {
-                        break;
-                    }
-
-                    var success = await SendRequestAsync();
-                    if( !success )
-                    {
-                        retryCount++;
-                        _cachedRequestsManager.CacheFailedRequest( request.Request ); //re-queue the failed request since GetNextCachedRequest dequeues it
-
-                        if( retryCount >= maxRetries )
-                        {
-                            Log.Error( "Max retries reached, stopping cached request processing." );
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        //dequeue already happens above, not needed to be taken care of here
-                        retryCount = 0;
-                        Log.Info( $"Successfully processed cached request. Remaining: {_cachedRequestsManager?.GetCachedRequestCount()}" );
-                    }
-                    processedCount++;
-
-                    //await Task.Delay( 100 );
-                }
-            }
-            catch( Exception ex )
-            {
-                Log.Error( $"An exception of type {ex.GetType().FullName} occurred", ex );
-            }
-            finally
-            {
-                Log.Info( $"Processed {processedCount} batched requests, remaining:{_cachedRequestsManager?.GetCachedRequestCount()}" );
-                _isProcessingCachedRequests = false;
-            }
-        }
-
-
         public async Task<bool> SendRequestAsync()
         {
             var availableServers = _servers.Keys
@@ -171,7 +95,8 @@ namespace LoadBalancer
                 return false;
             }
 
-            return await _requestHandler.SendRequestAsync( server );
+            var success = await _requestHandler.SendRequestAsync( server );
+            return success;
         }
 
         private void StartHealthDecrementTask( double timeInSec = 10, double decreaseAmount = 5 )
@@ -264,6 +189,92 @@ namespace LoadBalancer
             return;
         }
 
+        private async Task<bool> HandleScaleDownRequest()
+        {
+            Log.Debug( $"Cleaning up remaining cached requests before scaling down, Count:{_cachedRequestsManager?.GetCachedRequestCount()}" );
+            if( !_cachedRequestsManager?.HasCachedRequests() ?? true )
+            {
+                return true;
+            }
+
+            await ProcessCachedRequestsBatchAsync();
+            return !( _cachedRequestsManager?.HasCachedRequests() ?? false );
+        }
+
+        private async Task ProcessCachedRequestsBatchAsync( bool flushAll = false )
+        {
+            //ensures we dont start multiple processing sessions simultaneously
+            if( _isProcessingCachedRequests )
+            {
+                Log.Debug( $"Returning since {nameof( _isProcessingCachedRequests )} is set to {_isProcessingCachedRequests}" );
+                return;
+            }
+
+            lock( _processingLock )
+            {
+                if( _isProcessingCachedRequests )
+                {
+                    return;
+                }
+                _isProcessingCachedRequests = true;
+            }
+
+            int maxBatchSize = flushAll ? ( _cachedRequestsManager?.GetCachedRequestCount() ?? 0 ) : 5;
+            const int maxRetries = 3;
+            var processedCount = 0;
+            var retryCount = 0;
+
+            try
+            {
+                if( !_servers.Keys.Any( s => s.ServerHealth > _minHealthThreshold ) && flushAll )
+                {
+                    const int serversToInitialize = 4;
+                    Log.Debug( $"No healthy servers available for processing cached requests, total cached requests: {_cachedRequestsManager?.GetCachedRequestCount()}" );
+                    _autoScaler?.SpawnServers( count: serversToInitialize, bypassRestrictions: true );
+                    Log.Info( $"Initialized {serversToInitialize} new servers to take care of the cached instances" );
+                }
+
+                while( flushAll || ( processedCount < maxBatchSize && ( _cachedRequestsManager?.HasCachedRequests() ?? false ) ) )
+                {
+                    var request = _cachedRequestsManager?.GetNextCachedRequest();
+                    if( request == null )
+                    {
+                        break;
+                    }
+
+                    var success = await SendRequestAsync();
+                    if( !success )
+                    {
+                        retryCount = flushAll ? 0 : retryCount++;
+                        _cachedRequestsManager?.CacheFailedRequest( request.Request ); //re-queue the failed request since GetNextCachedRequest dequeues it
+
+                        if( !flushAll && retryCount >= maxRetries )
+                        {
+                            Log.Error( "Max retries reached, stopping cached request processing." );
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        //dequeue already happens above, not needed to be taken care of here
+                        retryCount = 0;
+                        Log.Info( $"Successfully processed cached request. Remaining: {_cachedRequestsManager?.GetCachedRequestCount()}" );
+                    }
+                    processedCount++;
+                }
+            }
+            catch( Exception ex )
+            {
+                Log.Error( $"An exception of type {ex.GetType().FullName} occurred", ex );
+            }
+            finally
+            {
+                Log.Info( $"Processed {processedCount} batched requests, remaining: {_cachedRequestsManager?.GetCachedRequestCount()}" );
+                _isProcessingCachedRequests = false;
+            }
+        }
+
+
         public void StopHealthChecks()
         {
             _healthCheckTimer?.Stop();
@@ -275,8 +286,14 @@ namespace LoadBalancer
             _healthCheckTimer?.Stop();
             _healthCheckTimer?.Dispose();
 
-            Log.Warn( $"Killing all the instantiated servers before exit. Count: {_servers.Count}" );
+            Log.Warn( $"Checking for cached requests before destroying all the server instances Count:{_cachedRequestsManager?.GetCachedRequestCount()}" );
+            if( _cachedRequestsManager?.GetCachedRequestCount() > 0 )
+            {
+                await ProcessCachedRequestsBatchAsync( true );
+            }
+            Log.Warn( $"Processed cached requests. Remaining:{_cachedRequestsManager?.GetCachedRequestCount()}" );
 
+            Log.Warn( $"Killing all the instantiated servers before exit. Count: {_servers.Count}" );
             var killServerTasks = new List<Task>();
             foreach( var server in _servers.Keys )
             {
