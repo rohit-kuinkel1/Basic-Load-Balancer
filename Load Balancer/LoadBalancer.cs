@@ -14,7 +14,6 @@ namespace LoadBalancer
         private readonly IAutoScaler? _autoScaler;
         private readonly CachedRequestsManager? _cachedRequestsManager;
         private System.Timers.Timer? _healthCheckTimer;
-        private System.Timers.Timer? _cachedRequestTimer;
         private readonly int _minHealthThreshold;
         private readonly object _processingLock = new object();
         private bool _isProcessingCachedRequests;
@@ -32,7 +31,7 @@ namespace LoadBalancer
             _loadBalancingStrategy = loadBalancingStrategy ?? new RoundRobinStrategy();
             _healthCheckService = new HealthCheckService( httpClient ?? new HttpClient() );
             _requestHandler = new RequestHandler( httpClient ?? new HttpClient() );
-            //_cachedRequestsManager = cachedRequestsManager ?? new CachedRequestsManager( HandleRequestAsync );
+            _cachedRequestsManager = cachedRequestsManager ?? new CachedRequestsManager( HandleRequestAsync );
             _minHealthThreshold = minHealthThreshold;
 
             if( enabledAutoScaling )
@@ -67,14 +66,6 @@ namespace LoadBalancer
             _healthCheckTimer.Start();
 
             StartHealthDecrementTask( timeInSec: 10, decreaseAmount: 3 );
-
-            //_cachedRequestTimer = new System.Timers.Timer
-            //{
-            //    Interval = TimeSpan.FromSeconds( 15 ).TotalMilliseconds, //process cached requests every 5 seconds
-            //    AutoReset = true
-            //};
-            //_cachedRequestTimer.Elapsed += async ( _, _ ) => await ProcessCachedRequestsBatchAsync();
-            //_cachedRequestTimer.Start();
         }
 
         public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
@@ -121,7 +112,7 @@ namespace LoadBalancer
             {
                 if( !_servers.Keys.Any( s => s.ServerHealth > _minHealthThreshold ) )
                 {
-                    Log.Debug( $"No healthy servers available for processing cached requests, total cached requests:{_cachedRequestsManager.GetCachedRequestCount()}" );
+                    Log.Debug( $"No healthy servers available for processing cached requests, total cached requests:{_cachedRequestsManager?.GetCachedRequestCount()}" );
                     return;
                 }
 
@@ -281,8 +272,6 @@ namespace LoadBalancer
 
         public async Task DestroyAsync()
         {
-            _cachedRequestTimer?.Stop();
-            _cachedRequestTimer?.Dispose();
             _healthCheckTimer?.Stop();
             _healthCheckTimer?.Dispose();
 

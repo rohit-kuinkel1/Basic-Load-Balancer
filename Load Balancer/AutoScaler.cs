@@ -38,6 +38,19 @@ namespace LoadBalancer
             _getCurrentServerCount = getCurrentServerCount ?? throw new ArgumentNullException( nameof( getCurrentServerCount ) );
         }
 
+        public int GetRequestCountForTimeWindow( int seconds )
+        {
+            var currentTime = DateTime.UtcNow;
+            var windowStartTime = currentTime.AddSeconds( -seconds );
+
+            var recentRequests = _requestMetrics
+                .Where( kvp => kvp.Key > windowStartTime )
+                .Sum( kvp => kvp.Value );
+
+            return recentRequests;
+        }
+
+
         public void Initialize()
         {
             for( int i = 0; i < _config.MinServers; i++ )
@@ -55,7 +68,6 @@ namespace LoadBalancer
             } );
 
         }
-
 
         public void TrackRequest( DateTime timestamp )
         {

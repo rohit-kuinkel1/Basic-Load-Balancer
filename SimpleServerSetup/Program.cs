@@ -14,30 +14,39 @@ namespace SimpleServer
     {
         public static void Main( string[] args )
         {
-            Log.AddSink(
-                   LogSinks.ConsoleAndFile,
-                   Path.Combine(
-                       Environment.GetFolderPath( Environment.SpecialFolder.Desktop ),
-                       "LoadBalancerLogs"
-                   )
-            );
-            Log.SetMinimumLevel( LoadBalancer.Logger.LogLevel.TRC );
-
-            if( args.Length > 0 )
+            try
             {
-                if( args[0].ToLowerInvariant() == "kill" && args.Length > 1 )
-                {
-                    KillProcessOnPort( args[1] );
-                    return;
-                }
-                else if( args[0].ToLowerInvariant() == "start" )
-                {
-                    StartServer( args.Length > 1 ? args[1] : "5001" );
-                    return;
-                }               
-            }
+                Task.Delay( 3000 );
+                Log.AddSink(
+                       LogSinks.ConsoleAndFile,
+                       Path.Combine(
+                           Environment.GetFolderPath( Environment.SpecialFolder.Desktop ),
+                           "LoadBalancerLogs"
+                       )
+                );
+                Log.SetMinimumLevel( LoadBalancer.Logger.LogLevel.TRC );
 
-            Console.WriteLine( "Usage: \n- To start the server: start [port(int)] \n- To kill process on port: kill [port(int)]" );
+                if( args.Length > 0 )
+                {
+                    if( args[0].ToLowerInvariant() == "kill" && args.Length > 1 )
+                    {
+                        KillProcessOnPort( args[1] );
+                        return;
+                    }
+                    else if( args[0].ToLowerInvariant() == "start" )
+                    {
+                        StartServer( args.Length > 1 ? args[1] : "5001" );
+                        return;
+                    }
+                }
+
+                Console.WriteLine( "Usage: \n- To start the server: start [port(int)] \n- To kill process on port: kill [port(int)]" );
+            }
+            catch( Exception ex )
+            {
+                Log.Error( $"An exception occured", ex );
+                Console.ReadLine();
+            }
         }
 
         private static void StartServer( string port )

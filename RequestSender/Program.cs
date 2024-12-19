@@ -43,9 +43,9 @@ namespace LoadBalancer
 
                 await SimulateTraffic(loadBalancer);
             }
-            catch (Exception ex) when (ex is LoadBalancerException)
+            catch (Exception ex) //catch all
             {
-                Log.Error("An error occurred", ex);
+                Log.Error($"An error occurred {ex.GetType().FullName}", ex);
                 Environment.Exit(1);
             }
             finally 
@@ -61,9 +61,9 @@ namespace LoadBalancer
                 //for 10 sec, send 1 req
                 (10, 1),
                 //for 60 sec, send 10 req
-                (20, 5),
-                (5, 5000),
-               // (20, 1),
+                (20, 500),
+                (20, 3000),
+                (10, 1),
                 (60, 700),
                 (20, 5),
                 (30, 500),
@@ -84,19 +84,10 @@ namespace LoadBalancer
                         {
                             var dummyRequest = new HttpRequestMessage(HttpMethod.Get, "http://localhost");
                             var wasRequestHandled = await loadBalancer.HandleRequestAsync(dummyRequest);
-                            if (wasRequestHandled)
-                            {
-                                Log.Info("Request: OK");
-                            }
-                            else
-                            {
-                                //TODO: when a request fails, cache it and save it according to the time, and when healthy servers are present, then send the requests following FIFO
-                                Log.Error("Request: Failed");
-                            }
                         }));
                     }
 
-                    await Task.Delay(15000);
+                    await Task.Delay(5000);
                 }
 
                 await Task.WhenAll(tasks);

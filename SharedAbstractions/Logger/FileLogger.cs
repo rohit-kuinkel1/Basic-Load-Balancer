@@ -78,7 +78,7 @@ namespace LoadBalancer.Logger
                     }
                 }
 
-                string fileName = $"LoadBalancer__{callingAssemblyName}__{_currentFileDate:dd_MM_yy__HH_mm_ss}.log";
+                string fileName = $"LoadBalancer__{callingAssemblyName}__{_currentFileDate:dd_MM_yy__HH_mm_ss}_{_currentFileDate.Ticks % 10000000 / 10}.log";
                 string logFileFullPath = Path.Combine(_targetDirectoryPath, fileName);
                 _writer = new StreamWriter(logFileFullPath, true, Encoding.UTF8) { AutoFlush = true };
             }
