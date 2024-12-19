@@ -6,6 +6,14 @@ using LoadBalancer.Logger;
 
 namespace LoadBalancer
 {
+    public enum ScaleDownTendency
+    {
+        //values represent seconds in the past from the present, so Aggressive = -5 representing DateTime.Now - 5sec
+        Aggressive = -5,
+        Normal = -30,
+        Lenient = -60,
+    }
+
     public class AutoScaler : IAutoScaler
     {
         private readonly AutoScalingConfig _config;
@@ -64,9 +72,9 @@ namespace LoadBalancer
             {
                 var currentTime = DateTime.UtcNow;
 
-                //30 seconds makes sure that the scaling down isnt as aggressive, if the time is for example 5 seconds, then the scale down is too aggressive
+                //makes sure that the scaling down isnt too aggressive, if the time is for example -5 seconds, then the scale down is too aggressive
                 var recentRequests = _requestMetrics
-                    .Where( kvp => kvp.Key > currentTime.AddSeconds( -30 ) )
+                    .Where( kvp => kvp.Key > currentTime.AddSeconds( (double)ScaleDownTendency.Normal ) )
                     .Sum( kvp => kvp.Value );
 
                 CleanupOldMetrics();
@@ -78,10 +86,10 @@ namespace LoadBalancer
             }
         }
 
-        private void CleanupOldMetrics( DateTime? currentTime = null)
+        private void CleanupOldMetrics( DateTime? currentTime = null )
         {
             var currentTime1 = currentTime ?? DateTime.UtcNow;
-           
+
             var oldMetrics = _requestMetrics.Keys.Where( k => k < currentTime1.AddMinutes( -5 ) );
             foreach( var key in oldMetrics )
             {
@@ -102,7 +110,7 @@ namespace LoadBalancer
                 }
                 else if( ShouldScaleDown( recentRequestsCount, currentServerCount ) )
                 {
-                    _removeServerCallback(true);
+                    _removeServerCallback( true );
                     Log.Info( $"Scaling down: Removed a server. Total servers: {currentServerCount - 1}" );
                 }
             }
@@ -130,11 +138,12 @@ namespace LoadBalancer
             => recentRequests < _config.NumberOfTotalMinRequestForScaleDown &&
                currentServerCount > _config.MinServers;
 
-        private void SpawnNewServer(int? preferredPort = null)
+        private void SpawnNewServer( int? preferredPort = null )
         {
             if( _getCurrentServerCount() >= _config.MaxServers )
             {
-                Log.Fatal( $"Cannot instantiate more servers since {nameof( _config )} allows max {_config.MaxServers} servers and {_getCurrentServerCount()} servers are already up." );
+                Log.Fatal( $"Cannot instantiate more servers since {nameof( _config )} allows " +
+                    $"max {_config.MaxServers} servers and {_getCurrentServerCount()} servers are already up." );
                 return;
             }
 
@@ -165,8 +174,8 @@ namespace LoadBalancer
             catch( Exception ex ) when( ex is TimeoutException or LoadBalancerException )
             {
                 Log.Error( $"Failed to spawn a new server on port {port}, releasing this port: {ex.Message}" );
-                PortUtils.ReleasePort( port );               
-            }          
+                PortUtils.ReleasePort( port );
+            }
         }
 
         public void KillServer( int port )

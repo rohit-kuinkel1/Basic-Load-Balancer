@@ -5,6 +5,8 @@ namespace LoadBalancer
 {
     public class Server : IServer
     {
+
+        public const string DefaultAddress = "localhost";
         public string ServerAddress { get; }
         public int ServerPort { get; }
 

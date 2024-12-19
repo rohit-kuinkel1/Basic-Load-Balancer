@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Diagnostics;
 using LoadBalancer.Interfaces;
 using LoadBalancer.Logger;
 using LoadBalancer.RequestCache;
@@ -37,9 +36,14 @@ namespace LoadBalancer
             {
                 _autoScaler = new AutoScaler(
                     autoScalingConfig ?? AutoScalingConfig.Factory(),
-                    () => new Server( "localhost", PortUtils.FindAvailablePort(), CircuitBreakerConfig.Factory(), 50, 100 ),
+                    () => new Server(
+                            Server.DefaultAddress,
+                            PortUtils.FindAvailablePort(),
+                            CircuitBreakerConfig.Factory(),
+                            80,
+                            100 ),
                     server => _servers.TryAdd( server, true ),
-                    RemoveUnhealthyServer,
+                    RemoveServer,
                     () => _servers.Count );
             }
         }
@@ -64,11 +68,17 @@ namespace LoadBalancer
 
         public async Task<bool> HandleRequestAsync( HttpRequestMessage request )
         {
+
+            if( _servers.Keys.Any( s => s.ServerHealth > _minHealthThreshold ) && _cachedRequestsManager.HasCachedRequests())
+            {
+                await ProcessCachedRequestsImmediately();
+            }
+
             _autoScaler?.TrackRequest( DateTime.UtcNow );
             var success = await SendRequestAsync();
             if( success )
             {
-                Log.Info( "Response:OK" );
+                Log.Info( "Response: OK" );
             }
             else
             {
@@ -79,7 +89,23 @@ namespace LoadBalancer
             return success;
         }
 
-    public async Task<bool> SendRequestAsync()
+        private async Task ProcessCachedRequestsImmediately()
+        {
+            const int maxBatchSize = 5;
+            var processedCount = 0;
+
+            while( processedCount < maxBatchSize )
+            {
+                var success = await _cachedRequestsManager.ProcessNextRequest();
+                if( !success )
+                {
+                    break;
+                }
+                processedCount++;
+            }
+        }
+
+        public async Task<bool> SendRequestAsync()
         {
             var availableServers = _servers.Keys
                 .Where( server => server.CanHandleRequest( 1 ) )
@@ -121,7 +147,7 @@ namespace LoadBalancer
 
                 if( !server.IsServerHealthy && server is Server s && s.CircuitBreaker.State == CircuitState.Open )
                 {
-                    RemoveUnhealthyServer();
+                    RemoveServer();
                 }
                 else
                 {
@@ -132,7 +158,7 @@ namespace LoadBalancer
             await Task.WhenAll( tasks );
         }
 
-        private void RemoveUnhealthyServer( bool forceRemoval = false )
+        private void RemoveServer( bool forceRemoval = false )
         {
             IServer? strm = null;
 
