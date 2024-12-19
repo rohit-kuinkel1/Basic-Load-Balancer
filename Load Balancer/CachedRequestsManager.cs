@@ -14,7 +14,7 @@ namespace LoadBalancer.RequestCache
         public CachedRequestsManager( Func<HttpRequestMessage, Task<bool>> handleRequest )
         {
             _handleRequest = handleRequest;
-            _retryTimer = new Timer( ProcessFailedRequests, null, RetryIntervalMs, RetryIntervalMs );
+           // _retryTimer = new Timer( ProcessFailedRequests, null, RetryIntervalMs, RetryIntervalMs );
         }
 
         public void CacheFailedRequest( HttpRequestMessage request )
@@ -24,75 +24,87 @@ namespace LoadBalancer.RequestCache
             Log.Info( $"Request cached. Queue size: {_failedRequests.Count}" );
         }
 
+        public CachedRequest? GetNextCachedRequest()
+        {
+            _failedRequests.TryDequeue( out CachedRequest? request );
+            Log.Debug( $"Dequeued cached request from {request?.Timestamp}" );
+            return request;
+        }
+
         public bool HasCachedRequests()
         {
-           return _failedRequests.Any();
+            return _failedRequests.Count != 0;
         }
 
-        public async Task<bool> ProcessNextRequest()
+        public int GetCachedRequestCount()
         {
-            if( _failedRequests.IsEmpty || _isProcessing )
-            {
-                return false;
-            }
-
-            try
-            {
-                if( _failedRequests.TryPeek( out CachedRequest? cachedRequest ) )
-                {
-                    var wasRequestHandled = await _handleRequest( cachedRequest.Request );
-                    if( wasRequestHandled )
-                    {
-                        _failedRequests.TryDequeue( out _ );
-                        Log.Info( $"Cached request from {cachedRequest.Timestamp} processed successfully. Remaining: {_failedRequests.Count}" );
-                        return true;
-                    }
-                }
-            }
-            catch( Exception ex )
-            {
-                Log.Error( "Error processing cached request", ex );
-            }
-
-            return false;
+            return _failedRequests.Count;
         }
 
-        private async void ProcessFailedRequests( object? __ )
-        {
-            if( _isProcessing || _failedRequests.IsEmpty )
-            {
-                return;
-            }
+        //public async Task<bool> ProcessNextRequest()
+        //{
+        //    if( _failedRequests.IsEmpty || _isProcessing )
+        //    {
+        //        return false;
+        //    }
 
-            _isProcessing = true;
+        //    try
+        //    {
+        //        if( _failedRequests.TryPeek( out CachedRequest? cachedRequest ) )
+        //        {
+        //            var wasRequestHandled = await _handleRequest( cachedRequest.Request );
+        //            if( wasRequestHandled )
+        //            {
+        //                _failedRequests.TryDequeue( out _ );
+        //                Log.Info( $"Cached request from {cachedRequest.Timestamp} processed successfully. Remaining: {_failedRequests.Count}" );
+        //                return true;
+        //            }
+        //        }
+        //    }
+        //    catch( Exception ex )
+        //    {
+        //        Log.Error( "Error processing cached request", ex );
+        //    }
 
-            try
-            {
-                while( _failedRequests.TryPeek( out var cachedRequest ) )
-                {
-                    var wasRequestHandled = await _handleRequest( cachedRequest.Request );
+        //    return false;
+        //}
 
-                    if( wasRequestHandled )
-                    {
-                        _failedRequests.TryDequeue( out _ );
-                        Log.Info( $"Cached request processed successfully. Remaining: {_failedRequests.Count}" );
-                    }
-                    else
-                    {
-                        //if current request fails, stop processing and wait for next retry interval
-                        break;
-                    }
-                }
-            }
-            catch( Exception ex )
-            {
-                Log.Error( "Error processing cached requests", ex );
-            }
-            finally
-            {
-                _isProcessing = false;
-            }
-        }
+        //private async void ProcessFailedRequests( object? __ )
+        //{
+        //    if( _isProcessing || _failedRequests.IsEmpty )
+        //    {
+        //        return;
+        //    }
+
+        //    _isProcessing = true;
+
+        //    try
+        //    {
+        //        while( _failedRequests.TryPeek( out var cachedRequest ) )
+        //        {
+        //            var wasRequestHandled = await _handleRequest( cachedRequest.Request );
+
+        //            if( wasRequestHandled )
+        //            {
+        //                _failedRequests.TryDequeue( out _ );
+        //                Log.Info( $"Cached request from {cachedRequest.Timestamp} processed successfully. Remaining: {_failedRequests.Count}" );
+        //            }
+        //            else
+        //            {
+        //                //if current request fails, stop processing and wait for next retry interval
+        //                break;
+        //            }
+        //        }
+        //    }
+        //    catch( Exception ex )
+        //    {
+        //        Log.Error( "Error processing cached requests", ex );
+        //    }
+        //    finally
+        //    {
+        //        _isProcessing = false;
+        //    }
+        //}
 
         public async Task DisposeAsync()
         {
