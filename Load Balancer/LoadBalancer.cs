@@ -297,6 +297,7 @@ namespace LoadBalancer
             var killServerTasks = new List<Task>();
             foreach( var server in _servers.Keys )
             {
+                Log.Info( $"Killing {server.ServerAddress}:{server.ServerPort}" );
                 if( _autoScaler != null )
                 {
                     killServerTasks.Add( Task.Run( () => _autoScaler.KillServer( server.ServerPort ) ) );

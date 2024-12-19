@@ -22,14 +22,14 @@ namespace LoadBalancer
         private readonly Action<IServer> _addServerCallback;
         private readonly Action<bool> _removeServerCallback;
         private readonly Func<int> _getCurrentServerCount;
-        private readonly Func<Task> _handleScaleDownRequest;
+        private readonly Func<Task<bool>> _handleScaleDownRequest;
 
         public AutoScaler(
             AutoScalingConfig config,
             Action<IServer> addServerCallback,
             Action<bool> removeServerCallback,
             Func<int> getCurrentServerCount,
-            Func<Task> handleScaleDownRequest)
+            Func<Task<bool>> handleScaleDownRequest)
         {
             _config = config ?? throw new ArgumentNullException( nameof( config ) );
             _addServerCallback = addServerCallback ?? throw new ArgumentNullException( nameof( addServerCallback ) );
@@ -98,7 +98,7 @@ namespace LoadBalancer
                     .Sum( kvp => kvp.Value );
 
                 CleanupOldMetrics();
-                EvaluateAndScale( recentRequests );
+                await EvaluateAndScaleAsync( recentRequests );
             }
             catch( Exception ex ) when( ex is LoadBalancerException )
             {
@@ -117,22 +117,37 @@ namespace LoadBalancer
             }
         }
 
-        private void EvaluateAndScale( int recentRequestsCount )
+        private async Task EvaluateAndScaleAsync( int recentRequestsCount )
         {
+            bool shouldScaleUp;
+            bool shouldScaleDown;
+            int currentServerCount;
+
             lock( _scalingLock )
             {
-                var currentServerCount = _getCurrentServerCount();
-                var isScalingUpNecessary = ShouldScaleUp( recentRequestsCount, currentServerCount );
-                if( isScalingUpNecessary )
+                currentServerCount = _getCurrentServerCount();
+                shouldScaleUp = ShouldScaleUp( recentRequestsCount, currentServerCount );
+                shouldScaleDown = ShouldScaleDown( recentRequestsCount, currentServerCount );
+            }
+
+            if( shouldScaleUp )
+            {
+                lock( _scalingLock )
                 {
                     SpawnNewServer();
                     Log.Info( $"Scaling up: Added new server. Total servers: {currentServerCount + 1}" );
                 }
-                else if( ShouldScaleDown( recentRequestsCount, currentServerCount ) )
+            }
+            else if( shouldScaleDown )
+            {
+                bool canRemove = await _handleScaleDownRequest();
+                if( canRemove )
                 {
-                    _handleScaleDownRequest();
-                    _removeServerCallback( true );
-                    Log.Info( $"Scaling down: Removed a server. Total servers: {currentServerCount - 1}" );
+                    lock( _scalingLock )
+                    {
+                        _removeServerCallback( true );
+                        Log.Info( $"Scaling down: Removed a server. Total servers: {currentServerCount - 1}" );
+                    }
                 }
             }
         }
